@@ -1,0 +1,23 @@
+# Maven build output
+target/
+
+# Eclipse project files
+.classpath
+.project
+.settings/
+bin/
+
+# IntelliJ (in case anyone on the team uses it)
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment / secrets — never commit real values
+.env
+application-local.properties
