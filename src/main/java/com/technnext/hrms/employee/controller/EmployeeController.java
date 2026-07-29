@@ -139,7 +139,7 @@ public class EmployeeController {
             @RequestBody EmployeeRequest body,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, id);
-        return ApiResponse.ok("Updated", service.update(id, body));
+        return ApiResponse.ok("Updated", service.update(id, body, currentUser.isAdmin(principal)));
     }
 
     // Admin: link an employee record to a user account (enables that user's self-service).

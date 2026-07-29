@@ -46,6 +46,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
+		<!-- Explicit (not just transitive) so ObjectMapper/JsonNode/ObjectNode in the
+		     email package always resolve, regardless of what spring-boot-starter-webmvc
+		     happens to pull in transitively. Version is managed by the Spring Boot
+		     parent BOM, so no <version> needed here. -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

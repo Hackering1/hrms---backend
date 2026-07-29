@@ -44,6 +44,18 @@ public class CurrentUserService {
                 || hasRole(principal, "ROLE_HR_EXECUTIVE");
     }
 
+    /**
+     * "Admin-level" for HR data-integrity purposes: Super Admin or an HR role.
+     * Deliberately EXCLUDES plain MANAGER — a manager may create/edit employees
+     * on their team, but must not be able to change an existing Employee ID
+     * (employee_code). Only HR/Super Admin can.
+     */
+    public boolean isAdmin(CustomUserDetails principal) {
+        return hasRole(principal, "ROLE_SUPER_ADMIN")
+                || hasRole(principal, "ROLE_HR_ADMIN")
+                || hasRole(principal, "ROLE_HR_EXECUTIVE");
+    }
+
     private boolean hasRole(CustomUserDetails principal, String role) {
         if (principal == null) return false;
         return principal.getAuthorities().stream()

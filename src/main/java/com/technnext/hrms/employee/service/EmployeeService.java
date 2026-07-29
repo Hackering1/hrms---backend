@@ -19,7 +19,9 @@ import com.technnext.hrms.hrops.repository.ProbationTrackingRepository;
 import com.technnext.hrms.leave.service.LeaveBalanceService;
 import com.technnext.hrms.auth.service.AuthService;
 import com.technnext.hrms.auth.repository.UserRepository;
+import com.technnext.hrms.email.EmployeeWelcomeEmailEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
@@ -41,6 +43,7 @@ public class EmployeeService {
     private final LeaveBalanceService leaveBalanceService;
     private final AuthService authService;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
     @Transactional(readOnly = true)
     public List<EmployeeResponse> getAll() {
         return getAll(false);
@@ -149,18 +152,51 @@ public class EmployeeService {
                     resp.reportingManagerId(), resp.reportingManagerName(),
                     resp.education(), resp.experience());
         }
+
+        // Trigger the "welcome to the company" email whenever an email address was
+        // entered on the Add-Employee form — regardless of whether a login account
+        // was also created. Publishing here (inside the transactional method) is
+        // safe: the listener is AFTER_COMMIT + @Async, so the email only goes out
+        // once this employee is durably saved, and a slow/broken mail server can
+        // never delay or fail this request.
+        if (req.email() != null && !req.email().isBlank()) {
+            eventPublisher.publishEvent(new EmployeeWelcomeEmailEvent(
+                    req.email().trim(),
+                    saved.getFirstName(),
+                    saved.getLastName(),
+                    saved.getEmployeeCode(),
+                    saved.getDesignation() != null ? saved.getDesignation().getName() : null,
+                    saved.getDepartment() != null ? saved.getDepartment().getName() : null,
+                    tempPassword != null ? req.email().trim() : null,
+                    tempPassword
+            ));
+        }
         return resp;
     }
 
+    /**
+     * Update an employee.
+     *
+     * @param isAdmin true for SUPER_ADMIN (and HR roles, if ever used) — the only
+     *                callers allowed to change an existing Employee ID. A MANAGER
+     *                editing their team can update every other field, but any
+     *                attempt to change employeeCode is rejected here, even if the
+     *                frontend field were somehow re-enabled or the API called
+     *                directly — this is a server-side guarantee, not just a UI lock.
+     */
     @Transactional
-    public EmployeeResponse update(UUID id, EmployeeRequest req) {
+    public EmployeeResponse update(UUID id, EmployeeRequest req, boolean isAdmin) {
         Employee e = findOrThrow(id);
-        if (req.employeeCode() != null
-                && !req.employeeCode().equals(e.getEmployeeCode())
-                && employeeRepository.existsByEmployeeCode(req.employeeCode())) {
+        boolean codeChanged = req.employeeCode() != null
+                && !req.employeeCode().equals(e.getEmployeeCode());
+        if (codeChanged && !isAdmin) {
+            throw new BadRequestException(
+                    "Employee ID cannot be changed. Only a Super Admin can update it.");
+        }
+        if (codeChanged && employeeRepository.existsByEmployeeCode(req.employeeCode())) {
             throw new BadRequestException("Employee code already exists: " + req.employeeCode());
         }
-        apply(e, req);
+        apply(e, req, isAdmin);
         Employee saved = employeeRepository.save(e);
         educationRepository.deleteByEmployeeId(id);
         experienceRepository.deleteByEmployeeId(id);
@@ -321,7 +357,16 @@ public class EmployeeService {
     }
 
     private void apply(Employee e, EmployeeRequest req) {
-        e.setEmployeeCode(req.employeeCode());
+        // Used only by create(): the caller-supplied/generated code is set (and then
+        // overwritten with the final resolved `code`) regardless of role, since a
+        // brand-new employee obviously has no prior Employee ID to protect.
+        apply(e, req, true);
+    }
+
+    private void apply(Employee e, EmployeeRequest req, boolean isAdmin) {
+        if (isAdmin) {
+            e.setEmployeeCode(req.employeeCode());
+        }
         e.setFirstName(req.firstName());
         e.setLastName(req.lastName());
         e.setMiddleName(req.middleName());

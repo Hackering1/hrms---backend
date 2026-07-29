@@ -1,0 +1,187 @@
+package com.technnext.hrms.email;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+/**
+ * Sends transactional emails for the HR portal via the Microsoft Graph API
+ * (app-only / client-credentials auth), using the "TechNext HRMS Mailer"
+ * Azure AD App Registration and the hr@technnext.com mailbox.
+ *
+ * IMPORTANT reliability rule: nothing in this class is allowed to throw. A
+ * Graph/Azure AD outage, an expired secret, or a network hiccup must never
+ * fail (or roll back) an employee-creation request — it is only logged, so
+ * an admin can notice and re-send manually if needed. Callers can treat every
+ * public method here as "fire and forget".
+ */
+@Service
+@Slf4j
+public class EmailService {
+
+    private static final String GRAPH_SEND_MAIL_URL_TEMPLATE =
+            "https://graph.microsoft.com/v1.0/users/%s/sendMail";
+
+    private final GraphTokenService graphTokenService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    @Value("${app.mail.enabled:false}")
+    private boolean mailEnabled;
+
+    // The mailbox Graph sends AS — must be a real, licensed mailbox covered by
+    // the app registration's Mail.Send application permission.
+    @Value("${app.mail.from}")
+    private String fromMailbox;
+
+    @Value("${app.company.name}")
+    private String companyName;
+
+    @Value("${app.frontend.login-url}")
+    private String loginUrl;
+
+    public EmailService(GraphTokenService graphTokenService) {
+        this.graphTokenService = graphTokenService;
+    }
+
+    /**
+     * Notify a newly-added employee of their Employee ID and (if a login was
+     * created for them) their portal credentials.
+     */
+    public void sendEmployeeWelcomeEmail(EmployeeWelcomeEmailEvent event) {
+        if (!mailEnabled) {
+            log.info("[EmailService] Mail sending is disabled (app.mail.enabled=false); " +
+                    "skipping welcome email to {}", event.toEmail());
+            return;
+        }
+        if (event.toEmail() == null || event.toEmail().isBlank()) {
+            log.warn("[EmailService] No recipient email on event for employee {}; skipping.",
+                    event.employeeCode());
+            return;
+        }
+        try {
+            String subject = "Welcome to " + companyName + " — Your Employee ID: " + event.employeeCode();
+            String htmlBody = buildHtmlBody(event);
+            sendViaGraph(event.toEmail(), subject, htmlBody);
+            log.info("[EmailService] Welcome email sent to {} for employee {}",
+                    event.toEmail(), event.employeeCode());
+        } catch (Exception ex) {
+            // Never let an email failure surface to the caller — employee creation
+            // has already succeeded by this point and must not be affected.
+            log.error("[EmailService] Failed to send welcome email to {} for employee {}: {}",
+                    event.toEmail(), event.employeeCode(), ex.getMessage(), ex);
+        }
+    }
+
+    private void sendViaGraph(String toEmail, String subject, String htmlBody) throws Exception {
+        String accessToken = graphTokenService.getAccessToken();
+
+        ObjectNode emailAddress = objectMapper.createObjectNode();
+        emailAddress.put("address", toEmail);
+        ObjectNode toRecipientEntry = objectMapper.createObjectNode();
+        toRecipientEntry.set("emailAddress", emailAddress);
+
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("contentType", "HTML");
+        body.put("content", htmlBody);
+
+        ObjectNode message = objectMapper.createObjectNode();
+        message.put("subject", subject);
+        message.set("body", body);
+        message.putArray("toRecipients").add(toRecipientEntry);
+
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.set("message", message);
+        payload.put("saveToSentItems", true);
+
+        String requestUrl = String.format(GRAPH_SEND_MAIL_URL_TEMPLATE, fromMailbox);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(requestUrl))
+                .timeout(Duration.ofSeconds(20))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // Graph's sendMail returns 202 Accepted with an empty body on success.
+        if (response.statusCode() != 202) {
+            throw new IllegalStateException(
+                    "Microsoft Graph sendMail failed: HTTP " + response.statusCode()
+                            + " — " + response.body());
+        }
+    }
+
+    private String buildHtmlBody(EmployeeWelcomeEmailEvent event) {
+        String fullName = (safe(event.firstName()) + " " + safe(event.lastName())).trim();
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2937;\">");
+        sb.append("<h2 style=\"color:#111827;\">Welcome to ").append(escape(companyName)).append("!</h2>");
+        sb.append("<p>Dear ").append(escape(fullName)).append(",</p>");
+        sb.append("<p>We're excited to have you on board. Your employee record has been created " +
+                "in our HR portal with the following details:</p>");
+        sb.append("<table style=\"border-collapse:collapse;width:100%;margin:16px 0;\">");
+        sb.append(row("Employee ID", event.employeeCode()));
+        if (event.designationName() != null && !event.designationName().isBlank()) {
+            sb.append(row("Designation", event.designationName()));
+        }
+        if (event.departmentName() != null && !event.departmentName().isBlank()) {
+            sb.append(row("Department", event.departmentName()));
+        }
+        sb.append("</table>");
+
+        if (event.tempPassword() != null && !event.tempPassword().isBlank()) {
+            sb.append("<p>An HR portal login account has also been created for you:</p>");
+            sb.append("<table style=\"border-collapse:collapse;width:100%;margin:16px 0;" +
+                    "background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;\">");
+            sb.append(row("Login Email", event.loginEmail()));
+            sb.append(row("Temporary Password", event.tempPassword()));
+            sb.append("</table>");
+            sb.append("<p style=\"margin-top:16px;\">")
+                    .append("<a href=\"").append(escape(loginUrl)).append("\" ")
+                    .append("style=\"background:#2563eb;color:#ffffff;padding:10px 18px;")
+                    .append("border-radius:6px;text-decoration:none;display:inline-block;\">")
+                    .append("Log in to the HR Portal</a></p>");
+            sb.append("<p style=\"color:#6b7280;font-size:13px;\">For security, you will be asked to " +
+                    "change this password the first time you log in. Please do not share it with anyone.</p>");
+        }
+
+        sb.append("<p>Please quote your Employee ID in all communication with HR. " +
+                "Note that your Employee ID cannot be changed by you — only an HR administrator can update it.</p>");
+        sb.append("<p>If you have any questions, please reach out to your HR administrator.</p>");
+        sb.append("<p style=\"margin-top:24px;color:#6b7280;font-size:13px;\">— ")
+                .append(escape(companyName)).append(" HR Team</p>");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private String row(String label, String value) {
+        return "<tr>" +
+                "<td style=\"padding:6px 12px;font-weight:bold;color:#374151;white-space:nowrap;\">" +
+                escape(label) + "</td>" +
+                "<td style=\"padding:6px 12px;color:#111827;\">" + escape(value) + "</td>" +
+                "</tr>";
+    }
+
+    private String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    private String escape(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;");
+    }
+}
