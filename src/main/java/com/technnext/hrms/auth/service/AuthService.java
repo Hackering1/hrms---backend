@@ -163,6 +163,14 @@ public class AuthService {
 
     public static final String DEFAULT_PASSWORD = "User@0412";
 
+    /** Used by the Invite Employee flow to validate uniqueness up front, before
+     *  creating the employee shell — gives the admin immediate feedback instead
+     *  of only failing later at onboarding-completion time. */
+    @Transactional(readOnly = true)
+    public boolean emailAlreadyRegistered(String email) {
+        return email != null && userRepository.existsByEmail(email);
+    }
+
     /**
      * Admin-side: create a login account for another person (e.g. a new employee).
      * Returns a map with "userId" (UUID) and "tempPassword" (String).
@@ -192,6 +200,38 @@ public class AuthService {
         out.put("userId", user.getId());
         out.put("tempPassword", initialPassword);
         return out;
+    }
+
+    /**
+     * Self-onboarding: create a login account using a password the person chose
+     * themselves (via the Invite Employee -> onboarding link flow), instead of an
+     * admin-generated temporary one. mustChangePassword is FALSE here — unlike
+     * createUserAccount() above — since there's no temp password to rotate out of.
+     * Returns the new user's id.
+     */
+    @Transactional
+    public UUID createUserAccountWithOwnPassword(String email, String roleName, String rawPassword) {
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("Email is required to create a login");
+        }
+        if (rawPassword == null || rawPassword.length() < 8) {
+            throw new BadRequestException("Password must be at least 8 characters");
+        }
+        if (userRepository.existsByEmail(email)) {
+            throw new BadRequestException("Email already registered: " + email);
+        }
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", roleName));
+
+        User user = User.builder()
+                .email(email)
+                .passwordHash(passwordEncoder.encode(rawPassword))
+                .isActive(true)
+                .mustChangePassword(false)
+                .roles(Set.of(role))
+                .build();
+        userRepository.save(user);
+        return user.getId();
     }
 
     /**

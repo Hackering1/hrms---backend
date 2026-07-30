@@ -25,4 +25,10 @@ public class EmployeeWelcomeEmailListener {
     public void onEmployeeWelcomeEmail(EmployeeWelcomeEmailEvent event) {
         emailService.sendEmployeeWelcomeEmail(event);
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onEmployeeInviteEmail(EmployeeInviteEmailEvent event) {
+        emailService.sendEmployeeInviteEmail(event);
+    }
 }

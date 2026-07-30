@@ -71,4 +71,25 @@ public class Employee {
     @Column(name = "ifsc_code") private String ifscCode;
     @Column(name = "uan_number") private String uanNumber;
     @Column(name = "email") private String email;
+
+    // --- Self-onboarding (Invite Employee flow) ---
+    // ACTIVE = normal (default for every employee added the classic way, and once
+    // an invited employee finishes onboarding). INVITED = shell record created by
+    // Send Invitation, waiting on the candidate to complete their own profile.
+    // Deliberately a SEPARATE field from `status` above, which is the employment
+    // lifecycle (ACTIVE/CONFIRMED/RESIGNED/EXITED/DELETED) — the two must never
+    // be conflated.
+    @Builder.Default
+    @Column(name = "onboarding_status", nullable = false)
+    private String onboardingStatus = "ACTIVE";
+
+    @Column(name = "address_line1") private String addressLine1;
+    @Column(name = "address_line2") private String addressLine2;
+    @Column(name = "city") private String city;
+    @Column(name = "state") private String state;
+    @Column(name = "postal_code") private String postalCode;
+    @Column(name = "country") private String country;
+    @Column(name = "emergency_contact_name") private String emergencyContactName;
+    @Column(name = "emergency_contact_phone") private String emergencyContactPhone;
+    @Column(name = "emergency_contact_relation") private String emergencyContactRelation;
 }

@@ -42,6 +42,18 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    // The onboarding token is missing/expired/already-used/cancelled. 410 Gone
+    // fits "this link no longer works" better than 400/404. `reason` in the
+    // data field lets EmployeeOnboardingPage.tsx show the exact right state
+    // (Invalid / Expired / Already Used) without parsing the message text.
+    @ExceptionHandler(InvalidInviteException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleInvalidInvite(InvalidInviteException ex) {
+        Map<String, String> data = new HashMap<>();
+        data.put("reason", ex.getReason().name());
+        return ResponseEntity.status(HttpStatus.GONE)
+                .body(new ApiResponse<>(false, ex.getMessage(), data, java.time.Instant.now()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();

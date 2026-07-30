@@ -9,4 +9,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
     Optional<Employee> findByUserId(UUID userId);
     // File-access check: employees whose profile photo url embeds a given stored-file id.
     java.util.List<Employee> findByProfilePhotoUrlContaining(String fileIdFragment);
+    // Invite Employee flow: employees still mid-onboarding (INVITED), for the
+    // Pending Profiles admin page.
+    java.util.List<Employee> findByOnboardingStatus(String onboardingStatus);
 }

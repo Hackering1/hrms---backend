@@ -167,6 +167,54 @@ public class EmailService {
         return sb.toString();
     }
 
+    /**
+     * Send the "Complete Your Employee Registration" invite email — the entry
+     * point into the self-onboarding flow.
+     */
+    public void sendEmployeeInviteEmail(EmployeeInviteEmailEvent event) {
+        if (!mailEnabled) {
+            log.info("[EmailService] Mail sending is disabled (app.mail.enabled=false); " +
+                    "skipping invite email to {}", event.toEmail());
+            return;
+        }
+        if (event.toEmail() == null || event.toEmail().isBlank()) {
+            log.warn("[EmailService] No recipient email on invite event for employee {}; skipping.",
+                    event.employeeCode());
+            return;
+        }
+        try {
+            String subject = "Complete Your Employee Registration";
+            String htmlBody = buildInviteHtmlBody(event);
+            sendViaGraph(event.toEmail(), subject, htmlBody);
+            log.info("[EmailService] Invite email sent to {} for employee {}",
+                    event.toEmail(), event.employeeCode());
+        } catch (Exception ex) {
+            log.error("[EmailService] Failed to send invite email to {} for employee {}: {}",
+                    event.toEmail(), event.employeeCode(), ex.getMessage(), ex);
+        }
+    }
+
+    private String buildInviteHtmlBody(EmployeeInviteEmailEvent event) {
+        String fullName = (safe(event.firstName()) + " " + safe(event.lastName())).trim();
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2937;\">");
+        sb.append("<p>Hello ").append(escape(fullName)).append(",</p>");
+        sb.append("<p>Welcome to ").append(escape(companyName)).append(".</p>");
+        sb.append("<p>Your employee profile has been created.</p>");
+        sb.append("<p>Please complete your onboarding using the secure link below.</p>");
+        sb.append("<p style=\"margin:24px 0;\">")
+                .append("<a href=\"").append(escape(event.onboardingUrl())).append("\" ")
+                .append("style=\"background:#2563eb;color:#ffffff;padding:12px 22px;")
+                .append("border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;\">")
+                .append("Complete Registration</a></p>");
+        sb.append("<p style=\"color:#6b7280;font-size:13px;\">The invitation expires in 24 hours. " +
+                "Your Employee ID is ").append(escape(event.employeeCode())).append(".</p>");
+        sb.append("<p style=\"margin-top:24px;color:#6b7280;font-size:13px;\">— ")
+                .append(escape(companyName)).append(" HR Team</p>");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
     private String row(String label, String value) {
         return "<tr>" +
                 "<td style=\"padding:6px 12px;font-weight:bold;color:#374151;white-space:nowrap;\">" +

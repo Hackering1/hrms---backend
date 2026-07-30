@@ -20,6 +20,8 @@ import com.technnext.hrms.leave.service.LeaveBalanceService;
 import com.technnext.hrms.auth.service.AuthService;
 import com.technnext.hrms.auth.repository.UserRepository;
 import com.technnext.hrms.email.EmployeeWelcomeEmailEvent;
+import com.technnext.hrms.invite.dto.InviteEmployeeRequest;
+import com.technnext.hrms.invite.dto.OnboardingCompleteRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -204,6 +206,132 @@ public class EmployeeService {
         return toResponse(saved);
     }
 
+    // =========================================================================
+    // INVITE EMPLOYEE / SELF-ONBOARDING
+    // =========================================================================
+
+    /**
+     * Super Admin's "Send Invitation": creates a minimal employee shell —
+     * NO personal/statutory/bank data, NO login account yet — and marks it
+     * onboardingStatus=INVITED. The candidate fills in the rest themselves via
+     * the emailed onboarding link (see EmployeeInviteService.completeOnboarding).
+     *
+     * Deliberately does NOT touch leave accrual or probation tracking here —
+     * those are created once onboarding actually completes, so an invite that
+     * expires unused never leaves half-created HR records behind.
+     */
+    @Transactional
+    public Employee createInviteShell(InviteEmployeeRequest req) {
+        String code = (req.employeeCode() == null || req.employeeCode().isBlank())
+                ? generateEmployeeCode()
+                : req.employeeCode().trim();
+        if (employeeRepository.existsByEmployeeCode(code)) {
+            throw new BadRequestException("Employee code already exists: " + code);
+        }
+        Employee e = new Employee();
+        e.setEmployeeCode(code);
+        e.setFirstName(req.firstName());
+        e.setLastName(req.lastName());
+        e.setDateOfJoining(req.dateOfJoining());
+        e.setEmail(req.email());
+        e.setOnboardingStatus("INVITED");
+        e.setBranch(req.branchId() == null ? null :
+                branchRepository.findById(req.branchId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Branch", req.branchId())));
+        e.setDepartment(req.departmentId() == null ? null :
+                departmentRepository.findById(req.departmentId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Department", req.departmentId())));
+        e.setDesignation(req.designationId() == null ? null :
+                designationRepository.findById(req.designationId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Designation", req.designationId())));
+        e.setShift(req.shiftId() == null ? null :
+                shiftRepository.findById(req.shiftId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Shift", req.shiftId())));
+
+        Employee saved = employeeRepository.save(e);
+        assignManagerIfPresent(saved.getId(), req.managerId());
+        return saved;
+    }
+
+    /**
+     * Candidate's "Complete Registration": fills in everything the invite shell
+     * didn't have, and (only now) sets up leave accrual + probation tracking,
+     * same as the classic create() flow does at creation time. Does NOT touch
+     * onboardingStatus or create the login account — that's orchestrated by
+     * EmployeeInviteService, which calls this, then AuthService, then flips
+     * onboardingStatus to ACTIVE once everything has succeeded.
+     */
+    @Transactional
+    public Employee applyOnboardingData(UUID employeeId, OnboardingCompleteRequest req) {
+        Employee e = findOrThrow(employeeId);
+
+        e.setDateOfBirth(req.dateOfBirth());
+        e.setGender(req.gender());
+        e.setBloodGroup(req.bloodGroup());
+        e.setMaritalStatus(req.maritalStatus());
+        e.setNationality(req.nationality());
+        e.setAddressLine1(req.addressLine1());
+        e.setAddressLine2(req.addressLine2());
+        e.setCity(req.city());
+        e.setState(req.state());
+        e.setPostalCode(req.postalCode());
+        e.setCountry(req.country());
+        e.setEmergencyContactName(req.emergencyContactName());
+        e.setEmergencyContactPhone(req.emergencyContactPhone());
+        e.setEmergencyContactRelation(req.emergencyContactRelation());
+        e.setAadhaarNumber(req.aadhaarNumber());
+        e.setPanNumber(req.panNumber());
+        e.setBankAccountNumber(req.bankAccountNumber());
+        e.setBankName(req.bankName());
+        e.setIfscCode(req.ifscCode());
+        e.setUanNumber(req.uanNumber());
+        e.setIsFresher(req.isFresher() == null ? Boolean.TRUE : req.isFresher());
+
+        Employee saved = employeeRepository.save(e);
+
+        boolean fresher = Boolean.TRUE.equals(saved.getIsFresher());
+        saveChildren(employeeId, req.education(), fresher ? null : req.experience());
+
+        leaveBalanceService.accrueForNewEmployee(saved.getId(), saved.getDateOfJoining(), saved.getGender());
+
+        LocalDate doj = saved.getDateOfJoining();
+        if (doj != null) {
+            LocalDate probEnd = saved.getProbationEndDate() != null
+                    ? saved.getProbationEndDate()
+                    : doj.plusMonths(6);
+            probationTrackingRepository.save(ProbationTracking.builder()
+                    .employeeId(saved.getId())
+                    .probationStart(doj)
+                    .probationEnd(probEnd)
+                    .status("IN_PROGRESS")
+                    .build());
+        }
+        return saved;
+    }
+
+    /** Flip an employee from INVITED to ACTIVE once onboarding + login creation both succeed. */
+    @Transactional
+    public void markOnboardingComplete(UUID employeeId, UUID newUserId) {
+        Employee e = findOrThrow(employeeId);
+        e.setOnboardingStatus("ACTIVE");
+        e.setUserId(newUserId);
+        employeeRepository.save(e);
+    }
+
+    @Transactional(readOnly = true)
+    public Employee getEntityById(UUID id) {
+        return findOrThrow(id);
+    }
+
+    /** Used by onboarding (candidate has no userId yet, so updateOwnProfilePhoto()
+     *  by userId doesn't apply — this sets it directly by employeeId instead). */
+    @Transactional
+    public void setProfilePhotoUrl(UUID employeeId, String url) {
+        Employee e = findOrThrow(employeeId);
+        e.setProfilePhotoUrl(url);
+        employeeRepository.save(e);
+    }
+
     @Transactional
     public void delete(UUID id) {
         // Soft-delete: archive the employee and disable their login instead of
@@ -317,8 +445,18 @@ public class EmployeeService {
     }
 
     private void saveChildren(UUID employeeId, EmployeeRequest req) {
-        if (req.education() != null) {
-            for (EducationDto d : req.education()) {
+        boolean fresher = req.isFresher() == null || req.isFresher();
+        saveChildren(employeeId, req.education(), fresher ? null : req.experience());
+    }
+
+    /**
+     * Shared by both the classic Add Employee flow (via the overload above) and
+     * EmployeeInviteService.completeOnboarding() — same persistence logic either
+     * way, just sourced from different request DTOs.
+     */
+    public void saveChildren(UUID employeeId, List<EducationDto> education, List<ExperienceDto> experience) {
+        if (education != null) {
+            for (EducationDto d : education) {
                 if (d == null || d.level() == null || d.level().isBlank()) continue;
                 educationRepository.save(EmployeeEducation.builder()
                         .employeeId(employeeId)
@@ -332,9 +470,8 @@ public class EmployeeService {
                         .build());
             }
         }
-        boolean fresher = req.isFresher() == null || req.isFresher();
-        if (!fresher && req.experience() != null) {
-            for (ExperienceDto x : req.experience()) {
+        if (experience != null) {
+            for (ExperienceDto x : experience) {
                 if (x == null || x.company() == null || x.company().isBlank()) continue;
                 experienceRepository.save(EmployeeExperience.builder()
                         .employeeId(employeeId)
