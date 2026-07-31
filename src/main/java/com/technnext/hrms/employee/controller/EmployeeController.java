@@ -115,9 +115,14 @@ public class EmployeeController {
      *  - MANAGER (or HR-as-manager): forced to the creating manager (the "belonging manager"),
      *    so any hire added from the Manager Portal auto-joins that manager's team.
      *  - SUPER_ADMIN: uses the managerId selected on the request (may be null = unassigned).
+     *
+     * Only a SUPER_ADMIN may create another SUPER_ADMIN login (mirrors the guard
+     * on /api/auth/register) — this prevents an HR/Manager account from
+     * escalating a new hire straight to full super-admin access.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER') and "
+            + "(#body.loginRole() != 'SUPER_ADMIN' or hasRole('SUPER_ADMIN'))")
     public ApiResponse<EmployeeResponse> create(
             @RequestBody EmployeeRequest body,
             @AuthenticationPrincipal CustomUserDetails principal) {
