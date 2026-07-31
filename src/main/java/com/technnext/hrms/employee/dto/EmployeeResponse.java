@@ -42,23 +42,27 @@ public record EmployeeResponse(
         // reporting manager (resolved from employee_managers)
         UUID reportingManagerId,
         String reportingManagerName,
+        // address / emergency contact / phone — lives in employee_contacts,
+        // null if the employee hasn't filled it in yet.
+        EmployeeContactDto contact,
         // nested
         List<EducationDto> education,
         List<ExperienceDto> experience
 ) {
-    /** Base mapping without nested lists or manager (all default to empty/null). */
+    /** Base mapping without nested lists, manager, or contact (all default to empty/null). */
     public static EmployeeResponse from(Employee e) {
-        return from(e, List.of(), List.of(), null, null);
+        return from(e, List.of(), List.of(), null, null, null);
     }
 
-    /** Mapping with nested lists but no manager info. */
+    /** Mapping with nested lists but no manager info or contact. */
     public static EmployeeResponse from(Employee e, List<EducationDto> edu, List<ExperienceDto> exp) {
-        return from(e, edu, exp, null, null);
+        return from(e, edu, exp, null, null, null);
     }
 
-    /** Full mapping including education + experience + reporting manager. */
+    /** Full mapping including education + experience + reporting manager + contact. */
     public static EmployeeResponse from(Employee e, List<EducationDto> edu, List<ExperienceDto> exp,
-                                        UUID reportingManagerId, String reportingManagerName) {
+                                        UUID reportingManagerId, String reportingManagerName,
+                                        EmployeeContactDto contact) {
         return new EmployeeResponse(
                 e.getId(), e.getEmployeeCode(), e.getFirstName(), e.getLastName(), e.getMiddleName(),
                 e.getDateOfBirth(), e.getGender(), e.getBloodGroup(), e.getMaritalStatus(), e.getNationality(),
@@ -76,6 +80,7 @@ public record EmployeeResponse(
                 e.getBankAccountNumber(), e.getBankName(), e.getIfscCode(), e.getUanNumber(),
                 e.getEmail(), e.getUserId(), null, e.getProfilePhotoUrl(),
                 reportingManagerId, reportingManagerName,
+                contact,
                 edu, exp
         );
     }

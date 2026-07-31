@@ -19,13 +19,21 @@ public record OnboardingCompleteRequest(
         String maritalStatus,
         String nationality,
 
-        // Address
+        // Address (current)
         String addressLine1,
         String addressLine2,
         String city,
         String state,
         String postalCode,
         String country,
+
+        // Address (permanent) — collected separately since employee_contacts
+        // distinguishes current vs. permanent address.
+        String permAddressLine1,
+        String permAddressLine2,
+        String permCity,
+        String permState,
+        String permPincode,
 
         // Emergency contact
         String emergencyContactName,

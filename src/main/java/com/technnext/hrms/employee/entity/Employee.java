@@ -83,13 +83,6 @@ public class Employee {
     @Column(name = "onboarding_status", nullable = false)
     private String onboardingStatus = "ACTIVE";
 
-    @Column(name = "address_line1") private String addressLine1;
-    @Column(name = "address_line2") private String addressLine2;
-    @Column(name = "city") private String city;
-    @Column(name = "state") private String state;
-    @Column(name = "postal_code") private String postalCode;
-    @Column(name = "country") private String country;
-    @Column(name = "emergency_contact_name") private String emergencyContactName;
-    @Column(name = "emergency_contact_phone") private String emergencyContactPhone;
-    @Column(name = "emergency_contact_relation") private String emergencyContactRelation;
+    // Address and emergency contact now live in EmployeeContact (employee_contacts
+    // table) — see EmployeeContactService. Deliberately not mapped here anymore.
 }

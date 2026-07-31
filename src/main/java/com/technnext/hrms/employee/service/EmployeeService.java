@@ -41,6 +41,7 @@ public class EmployeeService {
     private final EmployeeEducationRepository educationRepository;
     private final EmployeeExperienceRepository experienceRepository;
     private final EmployeeManagerRepository employeeManagerRepository;
+    private final com.technnext.hrms.employee.repository.EmployeeContactRepository employeeContactRepository;
     private final ProbationTrackingRepository probationTrackingRepository;
     private final LeaveBalanceService leaveBalanceService;
     private final AuthService authService;
@@ -152,6 +153,7 @@ public class EmployeeService {
                     resp.bankName(), resp.ifscCode(), resp.uanNumber(),
                     resp.email(), resp.userId(), tempPassword, resp.profilePhotoUrl(),
                     resp.reportingManagerId(), resp.reportingManagerName(),
+                    resp.contact(),
                     resp.education(), resp.experience());
         }
 
@@ -270,15 +272,6 @@ public class EmployeeService {
         e.setBloodGroup(req.bloodGroup());
         e.setMaritalStatus(req.maritalStatus());
         e.setNationality(req.nationality());
-        e.setAddressLine1(req.addressLine1());
-        e.setAddressLine2(req.addressLine2());
-        e.setCity(req.city());
-        e.setState(req.state());
-        e.setPostalCode(req.postalCode());
-        e.setCountry(req.country());
-        e.setEmergencyContactName(req.emergencyContactName());
-        e.setEmergencyContactPhone(req.emergencyContactPhone());
-        e.setEmergencyContactRelation(req.emergencyContactRelation());
         e.setAadhaarNumber(req.aadhaarNumber());
         e.setPanNumber(req.panNumber());
         e.setBankAccountNumber(req.bankAccountNumber());
@@ -288,6 +281,28 @@ public class EmployeeService {
         e.setIsFresher(req.isFresher() == null ? Boolean.TRUE : req.isFresher());
 
         Employee saved = employeeRepository.save(e);
+
+        // Address + emergency contact live in employee_contacts, not on the
+        // employee record itself — upsert (there's at most one row per employee).
+        com.technnext.hrms.employee.entity.EmployeeContact contact = employeeContactRepository
+                .findByEmployeeId(employeeId)
+                .orElseGet(() -> com.technnext.hrms.employee.entity.EmployeeContact.builder()
+                        .employeeId(employeeId).build());
+        contact.setAddressLine1(req.addressLine1());
+        contact.setAddressLine2(req.addressLine2());
+        contact.setCity(req.city());
+        contact.setState(req.state());
+        contact.setPincode(req.postalCode());
+        contact.setCountry(req.country());
+        contact.setPermAddressLine1(req.permAddressLine1());
+        contact.setPermAddressLine2(req.permAddressLine2());
+        contact.setPermCity(req.permCity());
+        contact.setPermState(req.permState());
+        contact.setPermPincode(req.permPincode());
+        contact.setEmergencyName(req.emergencyContactName());
+        contact.setEmergencyPhone(req.emergencyContactPhone());
+        contact.setEmergencyRelation(req.emergencyContactRelation());
+        employeeContactRepository.save(contact);
 
         boolean fresher = Boolean.TRUE.equals(saved.getIsFresher());
         saveChildren(employeeId, req.education(), fresher ? null : req.experience());
@@ -437,7 +452,12 @@ public class EmployeeService {
                     .orElse(null);
         }
 
-        return EmployeeResponse.from(e, edu, exp, reportingManagerId, reportingManagerName);
+        com.technnext.hrms.employee.dto.EmployeeContactDto contact = employeeContactRepository
+                .findByEmployeeId(e.getId())
+                .map(com.technnext.hrms.employee.dto.EmployeeContactDto::from)
+                .orElse(null);
+
+        return EmployeeResponse.from(e, edu, exp, reportingManagerId, reportingManagerName, contact);
     }
 
     private String safe(String s) {
