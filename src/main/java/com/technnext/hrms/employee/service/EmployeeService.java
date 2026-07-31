@@ -404,11 +404,12 @@ public class EmployeeService {
     private String generateEmployeeCode() {
         long n = employeeRepository.count() + 1;
         for (int i = 0; i < 10_000; i++) {
-            String candidate = EMP_CODE_PREFIX + String.format("%04d", n);
+            // "TN 001", "TN 002", ... — prefix, space, 3-digit zero-padded number.
+            String candidate = EMP_CODE_PREFIX + " " + String.format("%03d", n);
             if (!employeeRepository.existsByEmployeeCode(candidate)) return candidate;
             n++;
         }
-        return EMP_CODE_PREFIX + System.currentTimeMillis();
+        return EMP_CODE_PREFIX + " " + System.currentTimeMillis();
     }
 
     private void assignManagerIfPresent(UUID employeeId, UUID managerId) {

@@ -30,9 +30,14 @@ public class ManagerService {
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
 
-    /** Roles that make an employee eligible to be a manager (HR = Manager here). */
+    /**
+     * Roles that make an employee eligible to be a "reporting manager" (HR =
+     * Manager here). SUPER_ADMIN is included so a senior login — e.g. a Chief
+     * Executive Manager's Super Admin — can be picked as a reporting manager
+     * too, not just MANAGER/HR logins.
+     */
     private static final Set<String> MANAGER_ROLE_NAMES =
-            Set.of("MANAGER", "HR_ADMIN", "HR_EXECUTIVE");
+            Set.of("MANAGER", "HR_ADMIN", "HR_EXECUTIVE", "SUPER_ADMIN");
 
     // ── Team queries ─────────────────────────────────────────────────────────────
 
