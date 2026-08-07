@@ -402,7 +402,29 @@ public class EmployeeService {
     }
 
     private String generateEmployeeCode() {
-        long n = employeeRepository.count() + 1;
+        // Base the next number on the HIGHEST employee-code number that has ever
+        // existed (active or soft-deleted), not on employeeRepository.count().
+        // count() drifts from the true max whenever there are gaps in the
+        // sequence (e.g. historical seed data) or soft-deleted rows — that drift
+        // was previously causing the next code to jump further ahead than
+        // expected. Deleted employees' codes are intentionally never reused
+        // (their letters/payroll/audit history may still reference that code).
+        long maxNum = 0;
+        for (Employee e : employeeRepository.findAll()) {
+            String code = e.getEmployeeCode();
+            if (code == null) continue;
+            java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("(\\d+)\\s*$").matcher(code.trim());
+            if (m.find()) {
+                try {
+                    long num = Long.parseLong(m.group(1));
+                    if (num > maxNum) maxNum = num;
+                } catch (NumberFormatException ignored) {
+                    // non-numeric suffix (e.g. a manually entered code) — skip it
+                }
+            }
+        }
+        long n = maxNum + 1;
         for (int i = 0; i < 10_000; i++) {
             // "TN 001", "TN 002", ... — prefix, space, 3-digit zero-padded number.
             String candidate = EMP_CODE_PREFIX + " " + String.format("%03d", n);
