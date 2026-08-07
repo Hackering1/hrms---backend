@@ -34,7 +34,7 @@ public record LetterPdfRequest(
         String specialM, String specialA,
         String grossM, String grossA,
         String pfEmployerM, String pfEmployerA,
-        String pfAdminM, String pfAdminA,
+        String insuranceM, String insuranceA,
         String gratuityM, String gratuityA,
         String employerCostM, String employerCostA,
         String ctcMonthlyTotal, String ctcAnnualTotal,

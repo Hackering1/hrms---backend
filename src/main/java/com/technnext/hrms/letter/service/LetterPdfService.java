@@ -172,9 +172,7 @@ public class LetterPdfService {
             doc.add(l3);
         }
 
-        // Signatory — embed signature image if present, else blank space. Text
-        // stays left-aligned as originally designed; the image is centered by
-        // addSignatureImageOrGap.
+        // Signatory — embed signature image if present, else blank space.
         Paragraph forCo = new Paragraph(
                 "For TechNext Technologies and Services Private Limited.,", BODY);
         forCo.setSpacingBefore(40f);
@@ -286,26 +284,17 @@ public class LetterPdfService {
      * Embeds the signature image above the name, otherwise leaves vertical blank
      * space for a physical signature. #14: prefers an uploaded signature
      * (signatureFileId) and falls back to the bundled signature.png.
-     *
-     * Added as a standalone block Image (not an inline Chunk) so it always
-     * starts on its own line, left-aligned with the surrounding text (the
-     * "For TechNext..." line above and Name/Designation/Date below), with
-     * clear space above and below. The previous inline-Chunk(image, 0, 0)
-     * approach anchored the image to the current text cursor and could
-     * render it overlapping the end of the preceding line; Image.MIDDLE
-     * centers across the full page width rather than the text column, which
-     * pushed it well to the right of the left-aligned text — so this uses
-     * Image.LEFT to keep it flush with the rest of the signature block.
      */
     private void addSignatureImageOrGap(Document doc, String signatureFileId) throws DocumentException {
         Image sig = loadSignatureFromFile(signatureFileId);
         if (sig == null) sig = loadSignature();
         if (sig != null) {
             sig.scaleToFit(150f, 60f);
-            sig.setAlignment(Image.LEFT);
-            sig.setSpacingBefore(10f);
-            sig.setSpacingAfter(8f);
-            doc.add(sig);
+            Paragraph sp = new Paragraph();
+            sp.setSpacingBefore(6f);
+            sp.setSpacingAfter(2f);
+            sp.add(new Chunk(sig, 0, 0));   // inline image in a paragraph
+            doc.add(sp);
         } else {
             Paragraph sigSpace = new Paragraph(" ", BODY);
             sigSpace.setSpacingAfter(30f);
@@ -486,9 +475,7 @@ public class LetterPdfService {
         Paragraph p = new Paragraph("For TechNext Technologies and Services Private Limited", BODY_B);
         p.setSpacingBefore(12f);
         doc.add(p);
-        // signature image if present, else blank space for manual signing — the
-        // image itself is centered by addSignatureImageOrGap; the surrounding
-        // text stays left-aligned as originally designed.
+        // signature image if present, else blank space for manual signing
         addSignatureImageOrGap(doc, r.signatureFileId());
         doc.add(new Paragraph("Name: " + safe(r.signatoryName()), BODY));
         doc.add(new Paragraph("Designation: " + safe(r.signatoryTitle()), BODY));
@@ -498,7 +485,7 @@ public class LetterPdfService {
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.newPage();
         Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", TITLE);
-        h.setAlignment(Element.ALIGN_CENTER);
+        h.setAlignment(appointment ? Element.ALIGN_CENTER : Element.ALIGN_LEFT);
         h.setSpacingAfter(10f);
         doc.add(h);
         doc.add(new Paragraph("Name: " + safe(r.employeeName()), BODY_B));
@@ -512,23 +499,23 @@ public class LetterPdfService {
 
         headerCell(t, "Sr. No"); headerCell(t, "Salary Breakup"); headerCell(t, "Monthly (\u20B9)"); headerCell(t, "Annual (\u20B9)");
 
-        sectionRow(t, "A", "Salary Components");
+        sectionRow(t, "A", "Earnings");
         row(t, "i", "Basic Salary", r.basicM(), r.basicA());
-        row(t, "ii", "HRA", r.hraM(), r.hraA());
-        row(t, "iii", "LTA", r.ltaM(), r.ltaA());
+        row(t, "ii", "HRA (40% of Basic)", r.hraM(), r.hraA());
+        row(t, "iii", "Leave Travel Allowance", r.ltaM(), r.ltaA());
         row(t, "iv", "Special Allowance", r.specialM(), r.specialA());
-        totalRow(t, "Gross Salary (A)", r.grossM(), r.grossA(), LIGHTBLUE);
-        sectionRow(t, "B", "Employer Contribution");
-        row(t, "i", "Provident Fund", r.pfEmployerM(), r.pfEmployerA());
-        row(t, "ii", "PF- Admin Charges", r.pfAdminM(), r.pfAdminA());
-        row(t, "iii", "Gratuity", r.gratuityM(), r.gratuityA());
-        totalRow(t, "Total Employer Cost", r.employerCostM(), r.employerCostA(), LIGHTBLUE);
-        totalRowBlue(t, "Total CTC C=(A+B)", r.ctcMonthlyTotal(), r.ctcAnnualTotal());
-        sectionRow(t, "D", "Employee Deductions");
-        row(t, "i", "Provident Fund", r.pfEmployeeM(), r.pfEmployeeA());
-        row(t, "ii", "Professional Tax", r.ptM(), r.ptA());
+        totalRow(t, "Gross Salary (E)", r.grossM(), r.grossA(), LIGHTBLUE);
+        sectionRow(t, "B", "Employee Deductions");
+        row(t, "i", "Employee PF (Fixed)", r.pfEmployeeM(), r.pfEmployeeA());
+        row(t, "ii", "Professional Tax (KA)", r.ptM(), r.ptA());
         totalRow(t, "Total Deductions (D)", r.deductionsM(), r.deductionsA(), LIGHTBLUE);
-        totalRowBlue(t, "Net Take-Home (A-D)", r.netM(), r.netA());
+        totalRowBlue(t, "Net Take Home (Before TDS)", r.netM(), r.netA());
+        sectionRow(t, "D", "Employer Costs Included in CTC");
+        row(t, "i", "Employer PF (Fixed)", r.pfEmployerM(), r.pfEmployerA());
+        row(t, "ii", "Gratuity (4.81% of Basic)", r.gratuityM(), r.gratuityA());
+        row(t, "iii", "Group Health/Accident Insurance", r.insuranceM(), r.insuranceA());
+        totalRow(t, "Total Employer Cost", r.employerCostM(), r.employerCostA(), LIGHTBLUE);
+        totalRowBlue(t, "Total Cost to Company (CTC)", r.ctcMonthlyTotal(), r.ctcAnnualTotal());
 
         doc.add(t);
 

@@ -71,7 +71,7 @@ public class LetterPdfController {
                 r.ctcAnnual(), r.ctcInWords(),
                 r.basicM(), r.basicA(), r.hraM(), r.hraA(), r.ltaM(), r.ltaA(),
                 r.specialM(), r.specialA(), r.grossM(), r.grossA(),
-                r.pfEmployerM(), r.pfEmployerA(), r.pfAdminM(), r.pfAdminA(),
+                r.pfEmployerM(), r.pfEmployerA(), r.insuranceM(), r.insuranceA(),
                 r.gratuityM(), r.gratuityA(), r.employerCostM(), r.employerCostA(),
                 r.ctcMonthlyTotal(), r.ctcAnnualTotal(),
                 r.pfEmployeeM(), r.pfEmployeeA(), r.ptM(), r.ptA(),
