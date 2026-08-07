@@ -145,7 +145,7 @@ public class EmployeeService {
             resp = new EmployeeResponse(
                     resp.id(), resp.employeeCode(), resp.firstName(), resp.lastName(), resp.middleName(),
                     resp.dateOfBirth(), resp.gender(), resp.bloodGroup(), resp.maritalStatus(), resp.nationality(),
-                    resp.dateOfJoining(), resp.employmentType(), resp.status(),
+                    resp.dateOfJoining(), resp.employmentType(), resp.status(), resp.onboardingStatus(),
                     resp.branchId(), resp.branchName(), resp.departmentId(), resp.departmentName(),
                     resp.designationId(), resp.designationName(), resp.shiftId(), resp.shiftName(),
                     resp.probationEndDate(), resp.confirmationDate(),

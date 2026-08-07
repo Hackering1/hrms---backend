@@ -17,6 +17,12 @@ public record EmployeeResponse(
         LocalDate dateOfJoining,
         String employmentType,
         String status,
+        // Onboarding lifecycle — "INVITED" (invite sent, still completing their
+        // profile) or "ACTIVE" (fully onboarded). Separate from `status` above
+        // (employment lifecycle: ACTIVE/CONFIRMED/RESIGNED/EXITED/DELETED).
+        // Was missing from this DTO entirely — the Letters page's Employee
+        // dropdown filters on this field, so it silently matched nobody.
+        String onboardingStatus,
         Integer branchId,
         String branchName,
         Integer departmentId,
@@ -66,7 +72,7 @@ public record EmployeeResponse(
         return new EmployeeResponse(
                 e.getId(), e.getEmployeeCode(), e.getFirstName(), e.getLastName(), e.getMiddleName(),
                 e.getDateOfBirth(), e.getGender(), e.getBloodGroup(), e.getMaritalStatus(), e.getNationality(),
-                e.getDateOfJoining(), e.getEmploymentType(), e.getStatus(),
+                e.getDateOfJoining(), e.getEmploymentType(), e.getStatus(), e.getOnboardingStatus(),
                 e.getBranch() != null ? e.getBranch().getId() : null,
                 e.getBranch() != null ? e.getBranch().getName() : null,
                 e.getDepartment() != null ? e.getDepartment().getId() : null,

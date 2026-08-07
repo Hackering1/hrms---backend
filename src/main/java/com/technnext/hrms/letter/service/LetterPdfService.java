@@ -284,17 +284,23 @@ public class LetterPdfService {
      * Embeds the signature image above the name, otherwise leaves vertical blank
      * space for a physical signature. #14: prefers an uploaded signature
      * (signatureFileId) and falls back to the bundled signature.png.
+     *
+     * Added as a standalone block Image (not an inline Chunk) so it always
+     * starts on its own line, left-aligned with the surrounding text (the
+     * "For TechNext..." line above and Name/Designation/Date below), with
+     * clear space above and below. An inline Chunk(image, 0, 0) anchors the
+     * image to the current text cursor and can render it overlapping the end
+     * of the preceding line — Image.LEFT as a standalone block avoids that.
      */
     private void addSignatureImageOrGap(Document doc, String signatureFileId) throws DocumentException {
         Image sig = loadSignatureFromFile(signatureFileId);
         if (sig == null) sig = loadSignature();
         if (sig != null) {
             sig.scaleToFit(150f, 60f);
-            Paragraph sp = new Paragraph();
-            sp.setSpacingBefore(6f);
-            sp.setSpacingAfter(2f);
-            sp.add(new Chunk(sig, 0, 0));   // inline image in a paragraph
-            doc.add(sp);
+            sig.setAlignment(Image.LEFT);
+            sig.setSpacingBefore(10f);
+            sig.setSpacingAfter(8f);
+            doc.add(sig);
         } else {
             Paragraph sigSpace = new Paragraph(" ", BODY);
             sigSpace.setSpacingAfter(30f);
@@ -485,7 +491,8 @@ public class LetterPdfService {
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.newPage();
         Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", TITLE);
-        h.setAlignment(appointment ? Element.ALIGN_CENTER : Element.ALIGN_LEFT);
+        h.setAlignment(Element.ALIGN_CENTER);
+        h.setSpacingBefore(6f);
         h.setSpacingAfter(10f);
         doc.add(h);
         doc.add(new Paragraph("Name: " + safe(r.employeeName()), BODY_B));
