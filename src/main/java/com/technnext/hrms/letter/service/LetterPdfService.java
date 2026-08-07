@@ -175,13 +175,18 @@ public class LetterPdfService {
         // Signatory — embed signature image if present, else blank space.
         Paragraph forCo = new Paragraph(
                 "For TechNext Technologies and Services Private Limited.,", BODY);
+        forCo.setAlignment(Element.ALIGN_CENTER);
         forCo.setSpacingBefore(40f);
         doc.add(forCo);
 
         addSignatureImageOrGap(doc, r.signatureFileId());
 
-        doc.add(new Paragraph(safe(r.signatoryName()), BODY));
-        doc.add(new Paragraph(safe(r.signatoryTitle()), BODY));
+        Paragraph sigName = new Paragraph(safe(r.signatoryName()), BODY);
+        sigName.setAlignment(Element.ALIGN_CENTER);
+        doc.add(sigName);
+        Paragraph sigTitle = new Paragraph(safe(r.signatoryTitle()), BODY);
+        sigTitle.setAlignment(Element.ALIGN_CENTER);
+        doc.add(sigTitle);
     }
 
     private void addLetterhead(Document doc) throws DocumentException {
@@ -291,12 +296,14 @@ public class LetterPdfService {
         if (sig != null) {
             sig.scaleToFit(150f, 60f);
             Paragraph sp = new Paragraph();
+            sp.setAlignment(Element.ALIGN_CENTER);
             sp.setSpacingBefore(6f);
             sp.setSpacingAfter(2f);
             sp.add(new Chunk(sig, 0, 0));   // inline image in a paragraph
             doc.add(sp);
         } else {
             Paragraph sigSpace = new Paragraph(" ", BODY);
+            sigSpace.setAlignment(Element.ALIGN_CENTER);
             sigSpace.setSpacingAfter(30f);
             doc.add(sigSpace);
         }
@@ -473,19 +480,27 @@ public class LetterPdfService {
 
     private void addSignatory(Document doc, LetterPdfRequest r) throws DocumentException {
         Paragraph p = new Paragraph("For TechNext Technologies and Services Private Limited", BODY_B);
+        p.setAlignment(Element.ALIGN_CENTER);
         p.setSpacingBefore(12f);
         doc.add(p);
-        // signature image if present, else blank space for manual signing
+        // signature image if present, else blank space for manual signing — centered
+        // under the "For TechNext..." line, matching the name/designation/date below.
         addSignatureImageOrGap(doc, r.signatureFileId());
-        doc.add(new Paragraph("Name: " + safe(r.signatoryName()), BODY));
-        doc.add(new Paragraph("Designation: " + safe(r.signatoryTitle()), BODY));
-        doc.add(new Paragraph("Date: " + safe(r.letterDate()), BODY));
+        Paragraph name = new Paragraph("Name: " + safe(r.signatoryName()), BODY);
+        name.setAlignment(Element.ALIGN_CENTER);
+        doc.add(name);
+        Paragraph designation = new Paragraph("Designation: " + safe(r.signatoryTitle()), BODY);
+        designation.setAlignment(Element.ALIGN_CENTER);
+        doc.add(designation);
+        Paragraph date = new Paragraph("Date: " + safe(r.letterDate()), BODY);
+        date.setAlignment(Element.ALIGN_CENTER);
+        doc.add(date);
     }
 
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.newPage();
         Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", TITLE);
-        h.setAlignment(appointment ? Element.ALIGN_CENTER : Element.ALIGN_LEFT);
+        h.setAlignment(Element.ALIGN_CENTER);
         h.setSpacingAfter(10f);
         doc.add(h);
         doc.add(new Paragraph("Name: " + safe(r.employeeName()), BODY_B));
