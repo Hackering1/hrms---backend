@@ -288,17 +288,21 @@ public class LetterPdfService {
      * (signatureFileId) and falls back to the bundled signature.png.
      *
      * Added as a standalone block Image (not an inline Chunk) so it always
-     * starts on its own line, centered, with clear space above and below —
-     * the previous inline-Chunk(image, 0, 0) approach anchored the image to
-     * the current text cursor and could render it overlapping the end of the
-     * preceding line instead of sitting cleanly between the two text blocks.
+     * starts on its own line, left-aligned with the surrounding text (the
+     * "For TechNext..." line above and Name/Designation/Date below), with
+     * clear space above and below. The previous inline-Chunk(image, 0, 0)
+     * approach anchored the image to the current text cursor and could
+     * render it overlapping the end of the preceding line; Image.MIDDLE
+     * centers across the full page width rather than the text column, which
+     * pushed it well to the right of the left-aligned text — so this uses
+     * Image.LEFT to keep it flush with the rest of the signature block.
      */
     private void addSignatureImageOrGap(Document doc, String signatureFileId) throws DocumentException {
         Image sig = loadSignatureFromFile(signatureFileId);
         if (sig == null) sig = loadSignature();
         if (sig != null) {
             sig.scaleToFit(150f, 60f);
-            sig.setAlignment(Image.MIDDLE);
+            sig.setAlignment(Image.LEFT);
             sig.setSpacingBefore(10f);
             sig.setSpacingAfter(8f);
             doc.add(sig);
