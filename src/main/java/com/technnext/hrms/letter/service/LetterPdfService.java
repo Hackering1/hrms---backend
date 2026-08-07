@@ -172,21 +172,18 @@ public class LetterPdfService {
             doc.add(l3);
         }
 
-        // Signatory — embed signature image if present, else blank space.
+        // Signatory — embed signature image if present, else blank space. Text
+        // stays left-aligned as originally designed; the image is centered by
+        // addSignatureImageOrGap.
         Paragraph forCo = new Paragraph(
                 "For TechNext Technologies and Services Private Limited.,", BODY);
-        forCo.setAlignment(Element.ALIGN_CENTER);
         forCo.setSpacingBefore(40f);
         doc.add(forCo);
 
         addSignatureImageOrGap(doc, r.signatureFileId());
 
-        Paragraph sigName = new Paragraph(safe(r.signatoryName()), BODY);
-        sigName.setAlignment(Element.ALIGN_CENTER);
-        doc.add(sigName);
-        Paragraph sigTitle = new Paragraph(safe(r.signatoryTitle()), BODY);
-        sigTitle.setAlignment(Element.ALIGN_CENTER);
-        doc.add(sigTitle);
+        doc.add(new Paragraph(safe(r.signatoryName()), BODY));
+        doc.add(new Paragraph(safe(r.signatoryTitle()), BODY));
     }
 
     private void addLetterhead(Document doc) throws DocumentException {
@@ -289,21 +286,24 @@ public class LetterPdfService {
      * Embeds the signature image above the name, otherwise leaves vertical blank
      * space for a physical signature. #14: prefers an uploaded signature
      * (signatureFileId) and falls back to the bundled signature.png.
+     *
+     * Added as a standalone block Image (not an inline Chunk) so it always
+     * starts on its own line, centered, with clear space above and below —
+     * the previous inline-Chunk(image, 0, 0) approach anchored the image to
+     * the current text cursor and could render it overlapping the end of the
+     * preceding line instead of sitting cleanly between the two text blocks.
      */
     private void addSignatureImageOrGap(Document doc, String signatureFileId) throws DocumentException {
         Image sig = loadSignatureFromFile(signatureFileId);
         if (sig == null) sig = loadSignature();
         if (sig != null) {
             sig.scaleToFit(150f, 60f);
-            Paragraph sp = new Paragraph();
-            sp.setAlignment(Element.ALIGN_CENTER);
-            sp.setSpacingBefore(6f);
-            sp.setSpacingAfter(2f);
-            sp.add(new Chunk(sig, 0, 0));   // inline image in a paragraph
-            doc.add(sp);
+            sig.setAlignment(Image.MIDDLE);
+            sig.setSpacingBefore(10f);
+            sig.setSpacingAfter(8f);
+            doc.add(sig);
         } else {
             Paragraph sigSpace = new Paragraph(" ", BODY);
-            sigSpace.setAlignment(Element.ALIGN_CENTER);
             sigSpace.setSpacingAfter(30f);
             doc.add(sigSpace);
         }
@@ -480,21 +480,15 @@ public class LetterPdfService {
 
     private void addSignatory(Document doc, LetterPdfRequest r) throws DocumentException {
         Paragraph p = new Paragraph("For TechNext Technologies and Services Private Limited", BODY_B);
-        p.setAlignment(Element.ALIGN_CENTER);
         p.setSpacingBefore(12f);
         doc.add(p);
-        // signature image if present, else blank space for manual signing — centered
-        // under the "For TechNext..." line, matching the name/designation/date below.
+        // signature image if present, else blank space for manual signing — the
+        // image itself is centered by addSignatureImageOrGap; the surrounding
+        // text stays left-aligned as originally designed.
         addSignatureImageOrGap(doc, r.signatureFileId());
-        Paragraph name = new Paragraph("Name: " + safe(r.signatoryName()), BODY);
-        name.setAlignment(Element.ALIGN_CENTER);
-        doc.add(name);
-        Paragraph designation = new Paragraph("Designation: " + safe(r.signatoryTitle()), BODY);
-        designation.setAlignment(Element.ALIGN_CENTER);
-        doc.add(designation);
-        Paragraph date = new Paragraph("Date: " + safe(r.letterDate()), BODY);
-        date.setAlignment(Element.ALIGN_CENTER);
-        doc.add(date);
+        doc.add(new Paragraph("Name: " + safe(r.signatoryName()), BODY));
+        doc.add(new Paragraph("Designation: " + safe(r.signatoryTitle()), BODY));
+        doc.add(new Paragraph("Date: " + safe(r.letterDate()), BODY));
     }
 
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
