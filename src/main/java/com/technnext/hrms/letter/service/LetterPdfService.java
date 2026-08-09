@@ -303,12 +303,12 @@ public class LetterPdfService {
         if (sig != null) {
             sig.scaleToFit(150f, 60f);
             sig.setAlignment(Image.LEFT);
-            sig.setSpacingBefore(10f);
-            sig.setSpacingAfter(8f);
+            sig.setSpacingBefore(6f);
+            sig.setSpacingAfter(5f);
             doc.add(sig);
         } else {
             Paragraph sigSpace = new Paragraph(" ", BODY);
-            sigSpace.setSpacingAfter(30f);
+            sigSpace.setSpacingAfter(18f);
             doc.add(sigSpace);
         }
     }
@@ -485,7 +485,7 @@ public class LetterPdfService {
 
     private void addSignatory(Document doc, LetterPdfRequest r) throws DocumentException {
         Paragraph p = new Paragraph("For TechNext Technologies and Services Private Limited", BODY_B);
-        p.setSpacingBefore(12f);
+        p.setSpacingBefore(8f);
         doc.add(p);
         // signature image if present, else blank space for manual signing
         addSignatureImageOrGap(doc, r.signatureFileId());
@@ -501,23 +501,26 @@ public class LetterPdfService {
      * Annexure-A, etc.) — never a separate/hardcoded name.
      *
      * Wrapped in a single-cell, borderless PdfPTable with setKeepTogether(true)
-     * so OpenPDF keeps the whole section (heading, paragraph, and all three
-     * signature/date/place lines) together as one atomic unit — if it doesn't
-     * fully fit in the remaining space on the current page, the ENTIRE section
-     * moves to the next page rather than splitting awkwardly across pages.
+     * so this section is never split mid-way across a page boundary. This is
+     * a safety net only, not the cause of the section jumping to a new page —
+     * that was the spacing above being generous enough that there often wasn't
+     * room left on the current page. The spacing here (and in addSignatory /
+     * addSignatureImageOrGap above) was tightened specifically so the combined
+     * HR Director + Employee Acceptance block fits in the space actually
+     * available, so keepTogether rarely needs to trigger at all in practice.
      */
     private void addEmployeeAcceptance(Document doc, LetterPdfRequest r) throws DocumentException {
         PdfPTable box = new PdfPTable(1);
         box.setWidthPercentage(100);
         box.setKeepTogether(true);
-        box.setSpacingBefore(24f);
+        box.setSpacingBefore(12f);
 
         PdfPCell cell = new PdfPCell();
         cell.setBorder(Rectangle.NO_BORDER);
         cell.setPadding(0f);
 
         Paragraph heading = new Paragraph("Employee Acceptance", CLAUSE_T);
-        heading.setSpacingAfter(8f);
+        heading.setSpacingAfter(5f);
         cell.addElement(heading);
 
         Paragraph body = new Paragraph();
@@ -527,15 +530,15 @@ public class LetterPdfService {
         body.add(new Chunk(
                 ", have read, understood, and accepted the terms and conditions mentioned in this Offer Letter.",
                 BODY));
-        body.setSpacingAfter(20f);
+        body.setSpacingAfter(10f);
         cell.addElement(body);
 
         Paragraph sig = new Paragraph("Signature: ______________________________", BODY);
-        sig.setSpacingAfter(10f);
+        sig.setSpacingAfter(7f);
         cell.addElement(sig);
 
         Paragraph date = new Paragraph("Date: __________________________________", BODY);
-        date.setSpacingAfter(10f);
+        date.setSpacingAfter(7f);
         cell.addElement(date);
 
         Paragraph place = new Paragraph("Place: __________________________________", BODY);
