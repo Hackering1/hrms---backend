@@ -371,7 +371,7 @@ public class LetterPdfService {
                 cb.stroke();
                 cb.restoreState();
                 ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
-                        new Phrase("Address: TechNext Technologies and services Pvt Ltd, Novel MSR Tech Park,", foot),
+                        new Phrase("Address: TechNext Technologies and Services Pvt Ltd, Novel MSR Tech Park,", foot),
                         cx, ruleY - 16f, 0);
                 ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
                         new Phrase("Marathahalli, Bangalore - 560037 | CIN: U62013KA2026PTC215474", foot),
@@ -454,6 +454,7 @@ public class LetterPdfService {
         clause(doc, 8, "Confidentiality and Intellectual Property", "You shall maintain strict confidentiality of Company and client information during and after employment. All work, data, and intellectual property created during your employment shall be the sole property of the Company.");
         clause(doc, 9, "Acceptance of Offer", "This offer is valid for five (5) working days from the date of issue. Please sign and return a copy of this letter as a token of acceptance.");
         addSignatory(doc, r);
+        addEmployeeAcceptance(doc, r);
     }
 
     private void addAppointmentBody(Document doc, LetterPdfRequest r) throws DocumentException {
@@ -488,6 +489,57 @@ public class LetterPdfService {
         doc.add(new Paragraph("Date: " + safe(r.letterDate()), BODY));
     }
 
+    /**
+     * Employee Acceptance — added directly after the HR Director/signatory
+     * block in the Offer Letter. The employee name is the same
+     * r.employeeName() value already used throughout the letter (Recipient,
+     * Annexure-A, etc.) — never a separate/hardcoded name.
+     *
+     * Wrapped in a single-cell, borderless PdfPTable with setKeepTogether(true)
+     * so OpenPDF keeps the whole section (heading, paragraph, and all three
+     * signature/date/place lines) together as one atomic unit — if it doesn't
+     * fully fit in the remaining space on the current page, the ENTIRE section
+     * moves to the next page rather than splitting awkwardly across pages.
+     */
+    private void addEmployeeAcceptance(Document doc, LetterPdfRequest r) throws DocumentException {
+        PdfPTable box = new PdfPTable(1);
+        box.setWidthPercentage(100);
+        box.setKeepTogether(true);
+        box.setSpacingBefore(24f);
+
+        PdfPCell cell = new PdfPCell();
+        cell.setBorder(Rectangle.NO_BORDER);
+        cell.setPadding(0f);
+
+        Paragraph heading = new Paragraph("Employee Acceptance", CLAUSE_T);
+        heading.setSpacingAfter(8f);
+        cell.addElement(heading);
+
+        Paragraph body = new Paragraph();
+        body.setAlignment(Element.ALIGN_JUSTIFIED);
+        body.add(new Chunk("I, ", BODY));
+        body.add(new Chunk(safe(r.employeeName()), BODY_B));
+        body.add(new Chunk(
+                ", have read, understood, and accepted the terms and conditions mentioned in this Offer Letter.",
+                BODY));
+        body.setSpacingAfter(20f);
+        cell.addElement(body);
+
+        Paragraph sig = new Paragraph("Signature: ______________________________", BODY);
+        sig.setSpacingAfter(10f);
+        cell.addElement(sig);
+
+        Paragraph date = new Paragraph("Date: __________________________________", BODY);
+        date.setSpacingAfter(10f);
+        cell.addElement(date);
+
+        Paragraph place = new Paragraph("Place: __________________________________", BODY);
+        cell.addElement(place);
+
+        box.addCell(cell);
+        doc.add(box);
+    }
+
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.newPage();
         Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", TITLE);
@@ -495,10 +547,20 @@ public class LetterPdfService {
         h.setSpacingBefore(6f);
         h.setSpacingAfter(10f);
         doc.add(h);
-        doc.add(new Paragraph("Name: " + safe(r.employeeName()), BODY_B));
-        doc.add(new Paragraph("Designation: " + safe(r.designation()), BODY_B));
-        doc.add(new Paragraph("Total CTC (Per Annum): " + safe(r.ctcAnnual()), BODY_B));
-        doc.add(new Paragraph(" ", BODY));
+        // Name / Designation / CTC — centered as one info block directly under
+        // the heading, using real paragraph alignment (not manual whitespace or
+        // fixed X coordinates, so it centers correctly against the actual page
+        // width regardless of page size).
+        Paragraph nameP = new Paragraph("Name: " + safe(r.employeeName()), BODY_B);
+        nameP.setAlignment(Element.ALIGN_CENTER);
+        doc.add(nameP);
+        Paragraph desigP = new Paragraph("Designation: " + safe(r.designation()), BODY_B);
+        desigP.setAlignment(Element.ALIGN_CENTER);
+        doc.add(desigP);
+        Paragraph ctcP = new Paragraph("Total CTC (Per Annum): " + safe(r.ctcAnnual()), BODY_B);
+        ctcP.setAlignment(Element.ALIGN_CENTER);
+        ctcP.setSpacingAfter(10f);
+        doc.add(ctcP);
 
         PdfPTable t = new PdfPTable(4);
         t.setWidthPercentage(100);
