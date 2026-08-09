@@ -42,11 +42,16 @@ public class LetterPdfService {
     private static final Font H_LOGO = new Font(Font.TIMES_ROMAN, 18, Font.BOLD, BLUE);
     private static final Font H_SMALL = new Font(Font.TIMES_ROMAN, 7, Font.NORMAL, GREY);
     private static final Font CONTACT = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL, Color.BLACK);
-    private static final Font TITLE = new Font(Font.TIMES_ROMAN, 13, Font.BOLD, Color.BLACK);
-    private static final Font SUBTITLE = new Font(Font.TIMES_ROMAN, 11, Font.BOLD, Color.BLACK);
-    private static final Font CLAUSE_T = new Font(Font.TIMES_ROMAN, 11, Font.BOLD, Color.BLACK);
-    private static final Font BODY = new Font(Font.TIMES_ROMAN, 10.5f, Font.NORMAL, Color.BLACK);
-    private static final Font BODY_B = new Font(Font.TIMES_ROMAN, 10.5f, Font.BOLD, Color.BLACK);
+    // Main letter heading ("OFFER LETTER" / "APPOINTMENT LETTER" / "EMPLOYMENT
+    // SERVICE LETTER" / "EXPERIENCE CUM RELIEVING LETTER").
+    private static final Font TITLE = new Font(Font.TIMES_ROMAN, 16, Font.BOLD, Color.BLACK);
+    // Annexure-A heading specifically — deliberately a different size (14pt) per
+    // spec, so it needed its own constant rather than sharing TITLE.
+    private static final Font ANNEXURE_TITLE = new Font(Font.TIMES_ROMAN, 14, Font.BOLD, Color.BLACK);
+    private static final Font SUBTITLE = new Font(Font.TIMES_ROMAN, 13, Font.BOLD, Color.BLACK);
+    private static final Font CLAUSE_T = new Font(Font.TIMES_ROMAN, 13, Font.BOLD, Color.BLACK);
+    private static final Font BODY = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL, Color.BLACK);
+    private static final Font BODY_B = new Font(Font.TIMES_ROMAN, 12, Font.BOLD, Color.BLACK);
     private static final Font CELL = new Font(Font.TIMES_ROMAN, 9, Font.NORMAL, Color.BLACK);
     private static final Font CELL_B = new Font(Font.TIMES_ROMAN, 9, Font.BOLD, Color.BLACK);
     private static final Font CELL_W = new Font(Font.TIMES_ROMAN, 9, Font.BOLD, Color.WHITE);
@@ -542,7 +547,7 @@ public class LetterPdfService {
 
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.newPage();
-        Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", TITLE);
+        Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", ANNEXURE_TITLE);
         h.setAlignment(Element.ALIGN_CENTER);
         h.setSpacingBefore(6f);
         h.setSpacingAfter(10f);
