@@ -414,7 +414,7 @@ public class LetterPdfService {
             intro.add(new Chunk(safe(r.designation()), BODY_B));
             intro.add(new Chunk(" with ", BODY));
             intro.add(new Chunk("TechNext Technologies and Services Private Limited", BODY_B));
-            intro.add(new Chunk(" (\u201CCompany\u201D) with effect from ", BODY));
+            intro.add(new Chunk(" (\"Company\") with effect from ", BODY));
             intro.add(new Chunk(safe(r.dateOfJoining()), BODY_B));
             intro.add(new Chunk(", subject to the terms and conditions set forth in this letter.", BODY));
             intro.setSpacingBefore(6f);
@@ -426,7 +426,7 @@ public class LetterPdfService {
             intro.setAlignment(Element.ALIGN_JUSTIFIED);
             intro.add(new Chunk("With reference to the discussions held, we are pleased to offer you employment with ", BODY));
             intro.add(new Chunk("TechNext Technologies and Services Private Limited", BODY_B));
-            intro.add(new Chunk(" (\u201CCompany\u201D) for the position of ", BODY));
+            intro.add(new Chunk(" (\"Company\") for the position of ", BODY));
             intro.add(new Chunk(safe(r.designation()), BODY_B));
             intro.add(new Chunk(", subject to the following terms and conditions.", BODY));
             intro.setSpacingBefore(6f);
@@ -452,9 +452,9 @@ public class LetterPdfService {
         clause(doc, 2, "Probation", "You will be on probation for a period of six (6) months from your date of joining. Your performance, conduct, and suitability will be reviewed during this period. Confirmation of employment is not automatic and will be communicated in writing by the Company.");
         clause(doc, 3, "Compensation", "Your Annual Cost to Company (CTC) will be INR " + safe(r.ctcAnnual()) +
                 ". The detailed salary structure and breakup are provided in Annexure-A. Statutory deductions such as PF, Professional Tax, and TDS shall apply as per applicable laws. There is no variable pay or joining bonus applicable for this role.");
-        clause(doc, 4, "Working Hours and Duties", "Your working hours will be 8\u20139 hours per day, five days a week. You shall perform all duties assigned to you diligently and comply with all Company policies, rules, and regulations.");
+        clause(doc, 4, "Working Hours and Duties", "Your working hours will be 8-9 hours per day, five days a week. You shall perform all duties assigned to you diligently and comply with all Company policies, rules, and regulations.");
         clause(doc, 5, "Background Verification", "Your employment is subject to successful background verification. Any discrepancy, misrepresentation, or false information identified at any stage may result in immediate termination without notice.");
-        clause(doc, 6, "Termination of Employment", "The Company reserves the absolute right to terminate your employment at any time, with or without notice or compensation, during probation or after confirmation, based on performance, misconduct, policy violations, confidentiality breaches, or business requirements. If you resign, you are required to serve 30 days\u2019 notice during probation and 60 days\u2019 notice after confirmation, or salary in lieu thereof.");
+        clause(doc, 6, "Termination of Employment", "The Company reserves the absolute right to terminate your employment at any time, with or without notice or compensation, during probation or after confirmation, based on performance, misconduct, policy violations, confidentiality breaches, or business requirements. If you resign, you are required to serve 30 days' notice during probation and 60 days' notice after confirmation, or salary in lieu thereof.");
         clause(doc, 7, "Company Assets", "You shall return all Company assets, including laptop, ID card, access credentials, and documents, upon resignation or termination. Failure to return assets may result in deductions or legal recovery.");
         clause(doc, 8, "Confidentiality and Intellectual Property", "You shall maintain strict confidentiality of Company and client information during and after employment. All work, data, and intellectual property created during your employment shall be the sole property of the Company.");
         clause(doc, 9, "Acceptance of Offer", "This offer is valid for five (5) working days from the date of issue. Please sign and return a copy of this letter as a token of acceptance.");
@@ -471,12 +471,12 @@ public class LetterPdfService {
                 ". Your salary shall be paid on a monthly basis and shall be subject to statutory deductions including Provident Fund, Professional Tax, and Income Tax, as applicable under prevailing laws. The detailed salary structure is provided in Annexure-A attached hereto and forms an integral part of this appointment letter. The Company reserves the right to revise or restructure your compensation based on performance, business requirements, or statutory changes.");
         clause(doc, 4, "Duties and Responsibilities", "You shall perform your duties diligently, efficiently, and in the best interests of the Company. You are required to comply with all lawful instructions issued by the Company and maintain the highest standards of integrity, discipline, and professionalism. You shall not accept any commission, benefit, or gratification from any third party in connection with Company business.");
         clause(doc, 5, "Company Policies", "Your employment shall be governed by the policies, rules, and regulations of the Company, including but not limited to the code of conduct, leave policy, IT and data security policies, and disciplinary procedures. These policies may be amended from time to time, and you shall be required to comply with such amendments.");
-        clause(doc, 6, "Working Hours and Leave", "Your working hours shall ordinarily be eight to nine (8\u20139) hours per day for five working days a week. You may be required to work beyond standard working hours based on business requirements without additional compensation. You shall be entitled to leave as per the Company\u2019s leave policy in force from time to time. All leave requests must be approved in advance except in cases of genuine emergencies.");
+        clause(doc, 6, "Working Hours and Leave", "Your working hours shall ordinarily be eight to nine (8-9) hours per day for five working days a week. You may be required to work beyond standard working hours based on business requirements without additional compensation. You shall be entitled to leave as per the Company's leave policy in force from time to time. All leave requests must be approved in advance except in cases of genuine emergencies.");
         clause(doc, 7, "Confidentiality and Data Protection", "During the course of your employment, you may have access to confidential and proprietary information relating to the Company and its clients. You shall maintain strict confidentiality of such information and shall not disclose or use it for any purpose other than the performance of your duties. This obligation shall survive the termination of your employment. Any breach of confidentiality or data protection shall result in disciplinary action, including termination and legal proceedings.");
         clause(doc, 8, "Intellectual Property", "All intellectual property, including but not limited to documents, reports, databases, systems, processes, and any work created or developed by you during the course of your employment shall be the sole and exclusive property of the Company. You hereby assign all rights, title, and interest in such intellectual property to the Company.");
         clause(doc, 9, "Background Verification", "Your appointment is subject to satisfactory background verification. In the event that any information provided by you is found to be false, misleading, or incomplete, the Company reserves the right to terminate your employment immediately without notice or compensation.");
         clause(doc, 10, "Non-Compete and Non-Solicitation", "During your employment and for a reasonable period thereafter, you shall not engage in any activity that competes with the business of the Company, solicit Company clients, or induce employees to leave the Company.");
-        clause(doc, 11, "Termination", "During the probation period, either party may terminate employment by providing thirty (30) days\u2019 written notice. Upon confirmation, the notice period shall be sixty (60) days or salary in lieu thereof. Notwithstanding the above, the Company reserves the right to terminate your employment without notice or compensation in cases of misconduct, breach of Company policies, violation of confidentiality, fraud, misrepresentation, or any act detrimental to the interests of the Company.");
+        clause(doc, 11, "Termination", "During the probation period, either party may terminate employment by providing thirty (30) days' written notice. Upon confirmation, the notice period shall be sixty (60) days or salary in lieu thereof. Notwithstanding the above, the Company reserves the right to terminate your employment without notice or compensation in cases of misconduct, breach of Company policies, violation of confidentiality, fraud, misrepresentation, or any act detrimental to the interests of the Company.");
         clause(doc, 12, "Return of Company Property", "Upon termination of your employment, you shall immediately return all Company property in your possession, including but not limited to laptop, ID card, documents, access credentials, and any other materials belonging to the Company. You shall not retain any copies of Company data.");
         clause(doc, 13, "Governing Law and Jurisdiction", "This agreement shall be governed by the laws of India, and the courts of Bangalore shall have exclusive jurisdiction over any disputes arising out of or in connection with this employment.");
         clause(doc, 14, "Superseding Clause", "This appointment letter constitutes the entire agreement between you and the Company and supersedes all prior discussions, communications, or representations, whether oral or written.");
@@ -547,7 +547,7 @@ public class LetterPdfService {
 
     private void addSalaryAnnexure(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.newPage();
-        Paragraph h = new Paragraph(appointment ? "ANNEXURE \u2013 A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", ANNEXURE_TITLE);
+        Paragraph h = new Paragraph(appointment ? "ANNEXURE - A (COMPENSATION STRUCTURE)" : "Annexure-A: Salary Structure", ANNEXURE_TITLE);
         h.setAlignment(Element.ALIGN_CENTER);
         h.setSpacingBefore(6f);
         h.setSpacingAfter(10f);
