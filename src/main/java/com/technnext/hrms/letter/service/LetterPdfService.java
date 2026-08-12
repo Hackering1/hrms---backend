@@ -72,6 +72,15 @@ public class LetterPdfService {
                 doc.close();
                 return out.toByteArray();
             }
+            // Internship Experience Letter — also a distinct single-page
+            // layout (no resignation/relieving language, no salary annexure),
+            // reusing the same letterhead/watermark/footer/signature helpers.
+            if (type.equals("INTERNSHIP")) {
+                addLetterhead(doc);
+                addInternshipBody(doc, r);
+                doc.close();
+                return out.toByteArray();
+            }
             boolean appointment = type.equals("APPOINTMENT");
             addLetterhead(doc);
             addDateBlock(doc, r);
@@ -188,6 +197,99 @@ public class LetterPdfService {
         doc.add(new Paragraph(safe(r.signatoryName()), BODY));
         doc.add(new Paragraph(safe(r.signatoryTitle()), BODY));
     }
+
+    /**
+     * Internship Experience Letter — a distinct single-page layout, same
+     * shape as the Relieving/Experience letter (letterhead, "TO WHOMSOEVER
+     * IT MAY CONCERN", certification paragraph, signatory block) but for an
+     * intern who *completed* their internship rather than resigned. No
+     * resignation/relieving language anywhere.
+     *
+     * r.internshipDetails() is free text HR types per intern describing
+     * responsibilities/technologies/contributions — never hardcoded. If left
+     * blank, that paragraph is simply skipped rather than rendering empty.
+     */
+    private void addInternshipBody(Document doc, LetterPdfRequest r) throws DocumentException {
+        // Gender-aware pronouns (fall back to "their/them" if unknown) — same
+        // convention as addRelievingBody, for consistency.
+        String g = r.gender() == null ? "" : r.gender().trim().toUpperCase();
+        boolean male = g.startsWith("M");
+        boolean female = g.startsWith("F");
+        String his = male ? "his" : female ? "her" : "their";
+        String he = male ? "he" : female ? "she" : "they";
+        String him = male ? "him" : female ? "her" : "them";
+
+        Paragraph gap0 = new Paragraph(" ", BODY);
+        gap0.setSpacingAfter(18f);
+        doc.add(gap0);
+
+        Paragraph title = new Paragraph("INTERNSHIP EXPERIENCE LETTER", TITLE);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10f);
+        doc.add(title);
+
+        Paragraph sub = new Paragraph("TO WHOMSOEVER IT MAY CONCERN", SUBTITLE);
+        sub.setAlignment(Element.ALIGN_CENTER);
+        sub.setSpacingAfter(18f);
+        doc.add(sub);
+
+        doc.add(new Paragraph("Date: " + safe(r.letterDate()), BODY));
+        Paragraph gap1 = new Paragraph(" ", BODY);
+        gap1.setSpacingAfter(6f);
+        doc.add(gap1);
+
+        String start = safe(r.dateOfJoining());
+        String end = safe(r.employmentEndDate());
+        Paragraph line1 = new Paragraph();
+        line1.setAlignment(Element.ALIGN_JUSTIFIED);
+        line1.add(new Chunk("This is to certify that ", BODY));
+        line1.add(new Chunk(safe(r.employeeName()), BODY_B));
+        line1.add(new Chunk(
+                " has successfully completed an internship with TechNext Technologies and Services Private Limited as ", BODY));
+        line1.add(new Chunk(safe(r.designation()), BODY_B));
+        line1.add(new Chunk(", from ", BODY));
+        line1.add(new Chunk(start, BODY_B));
+        line1.add(new Chunk(" to ", BODY));
+        line1.add(new Chunk(end, BODY_B));
+        line1.add(new Chunk(".", BODY));
+        doc.add(line1);
+
+        Paragraph l2 = new Paragraph();
+        l2.setAlignment(Element.ALIGN_JUSTIFIED);
+        l2.setSpacingBefore(6f);
+        l2.add(new Chunk("During " + his + " internship, " + he
+                + " was found to be sincere, hardworking, and professional in "
+                + his + " conduct, and performed all assigned tasks and responsibilities to our satisfaction.", BODY));
+        doc.add(l2);
+
+        // HR-typed free text (responsibilities/technologies/contributions) —
+        // only rendered when actually provided, never hardcoded.
+        String details = safe(r.internshipDetails()).trim();
+        if (!details.isBlank()) {
+            Paragraph l3 = new Paragraph(details, BODY);
+            l3.setAlignment(Element.ALIGN_JUSTIFIED);
+            l3.setSpacingBefore(6f);
+            doc.add(l3);
+        }
+
+        Paragraph l4 = new Paragraph("We appreciate " + his + " contributions during the internship and wish "
+                + him + " all the best for " + his + " future career and professional endeavours.", BODY);
+        l4.setSpacingBefore(10f);
+        doc.add(l4);
+
+        // Signatory — same block structure as addRelievingBody, for
+        // consistency (embed signature image if present, else blank space).
+        Paragraph forCo = new Paragraph(
+                "For TechNext Technologies and Services Private Limited.,", BODY);
+        forCo.setSpacingBefore(40f);
+        doc.add(forCo);
+
+        addSignatureImageOrGap(doc, r.signatureFileId());
+
+        doc.add(new Paragraph(safe(r.signatoryName()), BODY));
+        doc.add(new Paragraph(safe(r.signatoryTitle()), BODY));
+    }
+
 
     private void addLetterhead(Document doc) throws DocumentException {
         PdfPTable t = new PdfPTable(2);

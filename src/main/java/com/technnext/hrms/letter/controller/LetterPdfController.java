@@ -57,6 +57,7 @@ public class LetterPdfController {
             case "APPOINTMENT": return "Appointment";
             case "RELIEVING":   return "Relieving";
             case "EXPERIENCE":  return "Experience";
+            case "INTERNSHIP":  return "Internship";
             default:            return "Offer";
         }
     }
@@ -66,6 +67,7 @@ public class LetterPdfController {
         return new LetterPdfRequest(
                 r.employeeId(), r.employeeName(), gender, r.letterType(),
                 r.letterDate(), r.place(), r.dateOfJoining(), r.employmentEndDate(),
+                r.internshipDetails(),
                 r.designation(), r.workLocation(),
                 r.employmentType(), r.contractDuration(), r.contractDurationUnit(),
                 r.ctcAnnual(), r.ctcInWords(),

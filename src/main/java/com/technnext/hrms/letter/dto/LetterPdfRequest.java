@@ -11,11 +11,15 @@ public record LetterPdfRequest(
         UUID employeeId,
         String employeeName,      // full name, resolved from employee record
         String gender,            // "MALE" | "FEMALE" | null — drives his/her wording
-        String letterType,        // "OFFER" | "APPOINTMENT" | "RELIEVING" | "EXPERIENCE"
+        String letterType,        // "OFFER" | "APPOINTMENT" | "RELIEVING" | "EXPERIENCE" | "INTERNSHIP"
         String letterDate,        // e.g. "08 July 2026"
         String place,             // e.g. "Bangalore"
-        String dateOfJoining,     // e.g. "02 June 2025" (relieving: employment START date)
-        String employmentEndDate, // NEW — relieving/experience: employment END date, e.g. "06 July 2026"
+        String dateOfJoining,     // e.g. "02 June 2025" (relieving/internship: START date)
+        String employmentEndDate, // relieving/experience/internship: END date, e.g. "06 July 2026"
+        // NEW — INTERNSHIP only: HR-typed free text describing the intern's
+        // responsibilities/technologies/contributions. Never hardcoded —
+        // blank/omitted simply skips that paragraph in the letter.
+        String internshipDetails,
         String designation,       // e.g. "Software Developer"
         String workLocation,      // e.g. "Bangalore"
         // NEW — employment type drives the wording in clause 1 of the Offer/
