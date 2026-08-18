@@ -40,6 +40,11 @@ public record LetterPdfRequest(
         String pfEmployerM, String pfEmployerA,
         String insuranceM, String insuranceA,
         String gratuityM, String gratuityA,
+        // NEW — optional Variable Pay component. Folded into the "Employer
+        // Costs Included in CTC" section of the salary annexure, right above
+        // Total Employer Cost — blank/"0" (i.e. omitted from the PDF row)
+        // whenever the frontend's Variable Pay toggle is "No".
+        String variablePayM, String variablePayA,
         String employerCostM, String employerCostA,
         String ctcMonthlyTotal, String ctcAnnualTotal,
         String pfEmployeeM, String pfEmployeeA,

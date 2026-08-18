@@ -857,6 +857,9 @@ public class LetterPdfService {
         row(t, "i", "Employer PF (Fixed)", r.pfEmployerM(), r.pfEmployerA());
         row(t, "ii", "Gratuity (4.81% of Basic)", r.gratuityM(), r.gratuityA());
         row(t, "iii", "Group Health/Accident Insurance", r.insuranceM(), r.insuranceA());
+        if (hasVariablePay(r)) {
+            row(t, "iv", "Variable Pay", r.variablePayM(), r.variablePayA());
+        }
         totalRow(t, "Total Employer Cost", r.employerCostM(), r.employerCostA(), LIGHTBLUE);
         totalRowBlue(t, "Total Cost to Company (CTC)", r.ctcMonthlyTotal(), r.ctcAnnualTotal());
 
@@ -971,6 +974,25 @@ public class LetterPdfService {
     }
 
     private String safe(String s) { return s == null ? "" : s; }
+
+    /**
+     * True only when a meaningful (> 0) Variable Pay amount was actually
+     * sent — i.e. the frontend's toggle was "Yes" and an amount was typed.
+     * When the toggle is "No", the frontend sends blank/omits the field, so
+     * this returns false and the Annexure-A row is skipped entirely rather
+     * than printing a spurious "Variable Pay: 0" line.
+     */
+    private boolean hasVariablePay(LetterPdfRequest r) {
+        String a = r.variablePayA();
+        if (a == null || a.isBlank()) return false;
+        String digits = a.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) return false;
+        try {
+            return Long.parseLong(digits) > 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
     private String cap(String s) { return s == null || s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1); }
     private String firstName(String full) {
         if (full == null || full.isBlank()) return "";
