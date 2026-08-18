@@ -81,6 +81,22 @@ public class LetterPdfService {
                 doc.close();
                 return out.toByteArray();
             }
+            // Contract-to-Hire Offer Letter — new letter type. Distinct clause
+            // set (contract term, nature of employment, termination-with-notice,
+            // etc.) per the company's C2H reference document, but reuses the
+            // same letterhead/date/title/signatory/employee-acceptance/salary
+            // annexure helpers as the standard Offer Letter — no existing
+            // OFFER/APPOINTMENT code path is touched.
+            if (type.equals("C2H")) {
+                addLetterhead(doc);
+                addDateBlock(doc, r);
+                addTitle(doc, "OFFER LETTER (Contract-to-Hire)");
+                addC2HRecipient(doc, r);
+                addC2HBody(doc, r);
+                addSalaryAnnexure(doc, r, false);
+                doc.close();
+                return out.toByteArray();
+            }
             boolean appointment = type.equals("APPOINTMENT");
             addLetterhead(doc);
             addDateBlock(doc, r);
@@ -290,6 +306,154 @@ public class LetterPdfService {
         doc.add(new Paragraph(safe(r.signatoryTitle()), BODY));
     }
 
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Contract-to-Hire (C2H) Offer Letter
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Recipient block for the C2H letter — same "To, / Name / Subject / Dear.."
+     * shape as {@link #addRecipient}, but with the C2H-specific subject line
+     * and intro sentence per the reference document. Kept as its own method
+     * (rather than adding a branch inside addRecipient) so the existing Offer
+     * Letter recipient text is never touched.
+     */
+    private void addC2HRecipient(Document doc, LetterPdfRequest r) throws DocumentException {
+        doc.add(new Paragraph("To,", BODY));
+        doc.add(new Paragraph(safe(r.employeeName()), BODY_B));
+        Paragraph gap = new Paragraph(" ", BODY);
+        gap.setSpacingAfter(4f);
+        doc.add(gap);
+
+        doc.add(new Paragraph("Subject: Offer of Employment \u2013 Contract-to-Hire (C2H)", BODY_B));
+        doc.add(new Paragraph("Dear " + firstName(r.employeeName()) + ",", BODY));
+
+        Paragraph intro = new Paragraph();
+        intro.setAlignment(Element.ALIGN_JUSTIFIED);
+        intro.add(new Chunk("With reference to the discussions held, we are pleased to offer you employment with ", BODY));
+        intro.add(new Chunk("TechNext Technologies and Services Private Limited", BODY_B));
+        intro.add(new Chunk(" (\"Company\") for the position of ", BODY));
+        intro.add(new Chunk(safe(r.designation()), BODY_B));
+        intro.add(new Chunk(" on a Contract-to-Hire (C2H) basis, subject to the following terms and conditions.", BODY));
+        intro.setSpacingBefore(6f);
+        doc.add(intro);
+    }
+
+    /**
+     * C2H clause body — clauses 1 to 10 exactly as structured in the reference
+     * Contract-to-Hire Offer Letter (Appointment Details, Nature of Employment,
+     * Compensation, Working Hours and Duties, Background Verification,
+     * Termination of Employment, Company Assets, Confidentiality and
+     * Intellectual Property, Code of Conduct, Acceptance of Offer), followed by
+     * the same Authorized Signatory + Employee Acceptance blocks used by the
+     * standard Offer Letter (reused, not duplicated).
+     */
+    private void addC2HBody(Document doc, LetterPdfRequest r) throws DocumentException {
+        String duration = safe(r.contractDuration()).trim();
+        String unit = unitLabel(r.contractDurationUnit());
+        String durationPhrase = duration.isBlank() ? "the agreed initial period" : duration + " " + unit;
+
+        clause(doc, 1, "Appointment Details",
+                "You are being appointed as " + safe(r.designation()) +
+                " on a Contract-to-Hire basis for an initial period of " + durationPhrase +
+                ", commencing from " + safe(r.dateOfJoining()) + " and ending on " + safe(r.employmentEndDate()) +
+                ", unless terminated earlier in accordance with this letter. Your work location shall be " +
+                safe(r.workLocation()) + ", and you will report to a person designated by the Company or the client organization.");
+
+        clause(doc, 2, "Nature of Employment",
+                "This appointment is strictly contractual in nature and shall not be construed as permanent employment " +
+                "with the Company or the client. Upon successful completion of the initial contract period, your engagement " +
+                "may be extended by TechNext Technologies and Services Private Limited, or may be converted into a Full-Time " +
+                "Employment (FTE) opportunity with the client organization based on your performance, attendance, conduct, " +
+                "business requirements, and client approval. The decision regarding extension or conversion shall be solely " +
+                "at the discretion of the Company and/or the client and shall be communicated in writing.");
+
+        clause(doc, 3, "Compensation",
+                "Your Annualized Cost to Company (CTC) shall be INR " + safe(r.ctcAnnual()) +
+                (r.ctcInWords() != null && !r.ctcInWords().isBlank() ? " (" + r.ctcInWords() + ")" : "") +
+                ". The detailed salary structure and applicable statutory deductions are provided in Annexure-A. " +
+                "Statutory deductions, including Provident Fund (PF), Professional Tax (PT), and Tax Deducted at Source " +
+                "(TDS), if applicable, shall be made in accordance with prevailing laws and regulations.");
+
+        clause(doc, 4, "Working Hours and Duties",
+                "Your working hours shall be 8\u20139 hours per day, five (5) days a week, or as prescribed by the client " +
+                "organization. You shall perform your duties diligently, adhere to all Company and client policies, and " +
+                "always maintain professional conduct.");
+
+        clause(doc, 5, "Background Verification",
+                "Your appointment is subject to satisfactory background verification and validation of all documents " +
+                "submitted by you. Any false declaration, suppression of facts, or discrepancies identified at any stage " +
+                "may result in immediate termination without notice.");
+
+        addC2HTerminationClause(doc);
+
+        clause(doc, 7, "Company Assets",
+                "You shall return all Company and/or client assets, including laptops, ID cards, access credentials, " +
+                "documents, and any confidential materials upon cessation of employment. Failure to do so may result in " +
+                "recovery proceedings.");
+
+        clause(doc, 8, "Confidentiality and Intellectual Property",
+                "You shall maintain strict confidentiality concerning all information pertaining to the Company, its " +
+                "clients, employees, business operations, and proprietary information during and after your employment. " +
+                "All work products, documents, databases, reports, and intellectual property developed during your " +
+                "engagement shall remain the exclusive property of the Company and/or the client.");
+
+        clause(doc, 9, "Code of Conduct",
+                "You are required to comply with all Company and client policies, including but not limited to " +
+                "attendance, information security, workplace ethics, and anti-harassment policies. Any violation may " +
+                "result in disciplinary action, including termination.");
+
+        clause(doc, 10, "Acceptance of Offer",
+                "This offer is valid for five (5) working days from the date of issuance. Kindly sign and return a copy " +
+                "of this letter as a token of your acceptance of the terms and conditions mentioned herein. We look " +
+                "forward to having you as part of our team and wish you a successful association with TechNext " +
+                "Technologies and Services Private Limited.");
+
+        addSignatory(doc, r);
+        addEmployeeAcceptance(doc, r);
+    }
+
+    /**
+     * Clause 6 ("Termination of Employment") has a bulleted list of
+     * immediate-termination grounds in the reference document, which the
+     * shared {@link #clause} helper (single body string) doesn't support —
+     * so it's built directly here rather than forcing that helper to change.
+     */
+    private void addC2HTerminationClause(Document doc) throws DocumentException {
+        Paragraph t = new Paragraph("6. Termination of Employment", CLAUSE_T);
+        t.setSpacingBefore(8f);
+        t.setSpacingAfter(2f);
+        doc.add(t);
+
+        Paragraph intro = new Paragraph("Either party may terminate this contract by providing fifteen (15) days' " +
+                "written notice or salary in lieu thereof during the contract period.", BODY);
+        intro.setAlignment(Element.ALIGN_JUSTIFIED);
+        intro.setSpacingAfter(3f);
+        doc.add(intro);
+
+        Paragraph lead = new Paragraph("The Company reserves the right to terminate your employment immediately " +
+                "without notice in cases of:", BODY);
+        lead.setAlignment(Element.ALIGN_JUSTIFIED);
+        lead.setSpacingAfter(2f);
+        doc.add(lead);
+
+        for (String reason : new String[]{
+                "Misconduct", "Poor performance", "Breach of confidentiality",
+                "Violation of Company or client policies", "Absenteeism or abandonment of employment",
+                "Business or client requirements"}) {
+            Paragraph b = new Paragraph("\u2022 " + reason, BODY);
+            b.setIndentationLeft(18f);
+            b.setSpacingAfter(1f);
+            doc.add(b);
+        }
+
+        Paragraph closing = new Paragraph("The completion of the initial contract period does not guarantee " +
+                "extension or absorption into permanent employment.", BODY);
+        closing.setAlignment(Element.ALIGN_JUSTIFIED);
+        closing.setSpacingBefore(4f);
+        closing.setSpacingAfter(4f);
+        doc.add(closing);
+    }
 
     private void addLetterhead(Document doc) throws DocumentException {
         PdfPTable t = new PdfPTable(2);

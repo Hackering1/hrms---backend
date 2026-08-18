@@ -58,6 +58,7 @@ public class LetterPdfController {
             case "RELIEVING":   return "Relieving";
             case "EXPERIENCE":  return "Experience";
             case "INTERNSHIP":  return "Internship";
+            case "C2H":         return "Contract_to_Hire_Offer";
             default:            return "Offer";
         }
     }
