@@ -11,6 +11,11 @@ public record LetterPdfRequest(
         UUID employeeId,
         String employeeName,      // full name, resolved from employee record
         String gender,            // "MALE" | "FEMALE" | null — drives his/her wording
+        // NEW — current address (used for the "To," block below the
+        // candidate's name in Offer/Appointment/C2H letters). Server-enriched
+        // from EmployeeContact when employeeId is set and the frontend didn't
+        // already supply one — same pattern as gender below.
+        String employeeAddress,
         String letterType,        // "OFFER" | "APPOINTMENT" | "RELIEVING" | "EXPERIENCE" | "INTERNSHIP"
         String letterDate,        // e.g. "08 July 2026"
         String place,             // e.g. "Bangalore"

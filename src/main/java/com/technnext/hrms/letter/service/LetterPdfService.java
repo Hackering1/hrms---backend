@@ -321,6 +321,7 @@ public class LetterPdfService {
     private void addC2HRecipient(Document doc, LetterPdfRequest r) throws DocumentException {
         doc.add(new Paragraph("To,", BODY));
         doc.add(new Paragraph(safe(r.employeeName()), BODY_B));
+        addAddressLines(doc, r);
         Paragraph gap = new Paragraph(" ", BODY);
         gap.setSpacingAfter(4f);
         doc.add(gap);
@@ -642,7 +643,7 @@ public class LetterPdfService {
                 cb.stroke();
                 cb.restoreState();
                 ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
-                        new Phrase("Address: TechNext Technologies and Services Pvt Ltd, Novel MSR Tech Park,", foot),
+                        new Phrase("Address: TechNext Technologies and services Pvt Ltd, Novel MSR Tech Park,", foot),
                         cx, ruleY - 16f, 0);
                 ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
                         new Phrase("Marathahalli, Bangalore - 560037 | CIN: U62013KA2026PTC215474", foot),
@@ -671,6 +672,7 @@ public class LetterPdfService {
     private void addRecipient(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
         doc.add(new Paragraph(appointment ? "To," : "To", BODY));
         doc.add(new Paragraph(safe(r.employeeName()), BODY_B));
+        addAddressLines(doc, r);
         doc.add(new Paragraph(" ", BODY));
         if (appointment) {
             doc.add(new Paragraph("Dear " + safe(r.employeeName()) + ",", BODY));
@@ -697,6 +699,23 @@ public class LetterPdfService {
             intro.add(new Chunk(", subject to the following terms and conditions.", BODY));
             intro.setSpacingBefore(6f);
             doc.add(intro);
+        }
+    }
+
+    /**
+     * Prints the candidate's current address as one line per address
+     * component (name → address → Subject/blank-gap → Dear...), exactly
+     * matching the reference letter's layout. Non-bold, regular body text.
+     * Prints nothing at all when no address is available (typed-but-
+     * unmatched candidates, or an employee record with no address on file)
+     * — never invents or hardcodes a placeholder.
+     */
+    private void addAddressLines(Document doc, LetterPdfRequest r) throws DocumentException {
+        String address = r.employeeAddress();
+        if (address == null || address.isBlank()) return;
+        for (String line : address.split("\n")) {
+            if (line.isBlank()) continue;
+            doc.add(new Paragraph(line.trim(), BODY));
         }
     }
 
