@@ -736,7 +736,10 @@ public class LetterPdfService {
                 ". Your date of joining will be " + safe(r.dateOfJoining()) + ", and you will report to a person assigned by the Company.");
         clause(doc, 2, "Probation", "You will be on probation for a period of six (6) months from your date of joining. Your performance, conduct, and suitability will be reviewed during this period. Confirmation of employment is not automatic and will be communicated in writing by the Company.");
         clause(doc, 3, "Compensation", "Your Annual Cost to Company (CTC) will be INR " + safe(r.ctcAnnual()) +
-                ". The detailed salary structure and breakup are provided in Annexure-A. Statutory deductions such as PF, Professional Tax, and TDS shall apply as per applicable laws. There is no variable pay or joining bonus applicable for this role.");
+                ". The detailed salary structure and breakup are provided in Annexure-A. Statutory deductions such as PF, Professional Tax, and TDS shall apply as per applicable laws." +
+                (hasVariablePay(r)
+                        ? " Your compensation includes a Variable Pay component, as detailed in Annexure-A."
+                        : " There is no variable pay or joining bonus applicable for this role."));
         clause(doc, 4, "Working Hours and Duties", "Your working hours will be 8-9 hours per day, five days a week. You shall perform all duties assigned to you diligently and comply with all Company policies, rules, and regulations.");
         clause(doc, 5, "Background Verification", "Your employment is subject to successful background verification. Any discrepancy, misrepresentation, or false information identified at any stage may result in immediate termination without notice.");
         clause(doc, 6, "Termination of Employment", "The Company reserves the absolute right to terminate your employment at any time, with or without notice or compensation, during probation or after confirmation, based on performance, misconduct, policy violations, confidentiality breaches, or business requirements. If you resign, you are required to serve 30 days' notice during probation and 60 days' notice after confirmation, or salary in lieu thereof.");
