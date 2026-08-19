@@ -670,7 +670,12 @@ public class LetterPdfService {
     }
 
     private void addRecipient(Document doc, LetterPdfRequest r, boolean appointment) throws DocumentException {
-        doc.add(new Paragraph(appointment ? "To," : "To", BODY));
+        // Offer and Appointment recipient blocks both use "To," (with comma)
+        // per the reference letter format — this previously only applied to
+        // Appointment, leaving the Offer Letter's "To" (no comma) out of
+        // sync. C2H's own addC2HRecipient() already used "To," and is
+        // untouched here.
+        doc.add(new Paragraph("To,", BODY));
         doc.add(new Paragraph(safe(r.employeeName()), BODY_B));
         addAddressLines(doc, r);
         doc.add(new Paragraph(" ", BODY));
