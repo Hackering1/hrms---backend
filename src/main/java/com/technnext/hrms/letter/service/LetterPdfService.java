@@ -1,6 +1,7 @@
 package com.technnext.hrms.letter.service;
 import com.lowagie.text.*;
 import com.lowagie.text.Image;
+import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
@@ -15,13 +16,24 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
 /**
  * Generates formatted Offer / Appointment / Relieving letter PDFs (letterhead,
  * clauses, salary table) using OpenPDF. HR-entered values are merged in.
  *
- * Fonts: whole document uses Times New Roman (Font.TIMES_ROMAN).
+ * Fonts: whole document uses an EMBEDDED Times New Roman-metric-compatible
+ *        Unicode font ("Tinos" — see src/main/resources/fonts/NOTICE.md),
+ *        not OpenPDF's built-in Font.TIMES_ROMAN. The built-in one is Adobe's
+ *        standard-14 "Times-Roman" — visually close but not the same font,
+ *        never embedded (every PDF viewer substitutes its own local
+ *        lookalike, which is why the same PDF could look subtly different
+ *        font-to-font across viewers), and limited to a narrow legacy
+ *        character set that silently drops anything outside it — including
+ *        the ₹ symbol used throughout the salary table. Embedding Tinos
+ *        fixes both: identical rendering everywhere, and full Unicode
+ *        coverage (₹, en-dash, bullet, etc.).
  * Signature: embeds src/main/resources/signature.png above the signatory name
  *            if present; otherwise leaves blank space for manual signing.
  */
@@ -38,24 +50,47 @@ public class LetterPdfService {
     private static final Color CYAN = new Color(0x00, 0xD4, 0xF0);   // brand cyan (footer rule)
     private static final Color LIGHTBLUE = new Color(0xD5, 0xE8, 0xF0);
     private static final Color GREY = new Color(0x33, 0x33, 0x33);
-    // All fonts Times New Roman.
-    private static final Font H_LOGO = new Font(Font.TIMES_ROMAN, 18, Font.BOLD, BLUE);
-    private static final Font H_SMALL = new Font(Font.TIMES_ROMAN, 7, Font.NORMAL, GREY);
-    private static final Font CONTACT = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL, Color.BLACK);
+
+    // Embedded Times New Roman-metric-compatible font (see class doc above).
+    // IDENTITY_H + full byte[] embedding = full Unicode glyph coverage,
+    // baked into the PDF itself rather than relying on the reader's fonts.
+    private static final BaseFont TIMES_REGULAR = loadEmbeddedFont("Tinos-Regular.ttf");
+    private static final BaseFont TIMES_BOLD = loadEmbeddedFont("Tinos-Bold.ttf");
+
+    private static BaseFont loadEmbeddedFont(String fileName) {
+        try (InputStream is = new ClassPathResource("fonts/" + fileName).getInputStream()) {
+            byte[] fontBytes = is.readAllBytes();
+            return BaseFont.createFont(fileName, BaseFont.IDENTITY_H, BaseFont.EMBEDDED, true, fontBytes, null);
+        } catch (IOException | DocumentException e) {
+            // A missing/corrupt font resource means every letter would fail
+            // to generate anyway — fail fast at class-load time with a clear
+            // cause rather than a confusing NPE deep inside PDF generation.
+            throw new ExceptionInInitializerError("Failed to load embedded font " + fileName + ": " + e.getMessage());
+        }
+    }
+
+    // All fonts: embedded Tinos (Times New Roman-metric-compatible), regular
+    // weight from TIMES_REGULAR, bold weight from TIMES_BOLD — never
+    // Font.BOLD synthetic bolding on top of the regular face, since a real
+    // bold outline (from the actual bold font file) renders more faithfully
+    // than a synthesized one.
+    private static final Font H_LOGO = new Font(TIMES_BOLD, 18, Font.NORMAL, BLUE);
+    private static final Font H_SMALL = new Font(TIMES_REGULAR, 7, Font.NORMAL, GREY);
+    private static final Font CONTACT = new Font(TIMES_REGULAR, 12, Font.NORMAL, Color.BLACK);
     // Main letter heading ("OFFER LETTER" / "APPOINTMENT LETTER" / "EMPLOYMENT
     // SERVICE LETTER" / "EXPERIENCE CUM RELIEVING LETTER").
-    private static final Font TITLE = new Font(Font.TIMES_ROMAN, 16, Font.BOLD, Color.BLACK);
+    private static final Font TITLE = new Font(TIMES_BOLD, 16, Font.NORMAL, Color.BLACK);
     // Annexure-A heading specifically — deliberately a different size (14pt) per
     // spec, so it needed its own constant rather than sharing TITLE.
-    private static final Font ANNEXURE_TITLE = new Font(Font.TIMES_ROMAN, 14, Font.BOLD, Color.BLACK);
-    private static final Font SUBTITLE = new Font(Font.TIMES_ROMAN, 13, Font.BOLD, Color.BLACK);
-    private static final Font CLAUSE_T = new Font(Font.TIMES_ROMAN, 13, Font.BOLD, Color.BLACK);
-    private static final Font BODY = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL, Color.BLACK);
-    private static final Font BODY_B = new Font(Font.TIMES_ROMAN, 12, Font.BOLD, Color.BLACK);
-    private static final Font CELL = new Font(Font.TIMES_ROMAN, 9, Font.NORMAL, Color.BLACK);
-    private static final Font CELL_B = new Font(Font.TIMES_ROMAN, 9, Font.BOLD, Color.BLACK);
-    private static final Font CELL_W = new Font(Font.TIMES_ROMAN, 9, Font.BOLD, Color.WHITE);
-    private static final Font FOOT = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL, GREY);
+    private static final Font ANNEXURE_TITLE = new Font(TIMES_BOLD, 14, Font.NORMAL, Color.BLACK);
+    private static final Font SUBTITLE = new Font(TIMES_BOLD, 13, Font.NORMAL, Color.BLACK);
+    private static final Font CLAUSE_T = new Font(TIMES_BOLD, 13, Font.NORMAL, Color.BLACK);
+    private static final Font BODY = new Font(TIMES_REGULAR, 12, Font.NORMAL, Color.BLACK);
+    private static final Font BODY_B = new Font(TIMES_BOLD, 12, Font.NORMAL, Color.BLACK);
+    private static final Font CELL = new Font(TIMES_REGULAR, 9, Font.NORMAL, Color.BLACK);
+    private static final Font CELL_B = new Font(TIMES_BOLD, 9, Font.NORMAL, Color.BLACK);
+    private static final Font CELL_W = new Font(TIMES_BOLD, 9, Font.NORMAL, Color.WHITE);
+    private static final Font FOOT = new Font(TIMES_REGULAR, 12, Font.NORMAL, GREY);
     public byte[] generate(LetterPdfRequest r) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -589,7 +624,7 @@ public class LetterPdfService {
         private boolean tried;
         private static final Color CYAN = new Color(0x00, 0xD4, 0xF0);
         private static final Color GREY = new Color(0x33, 0x33, 0x33);
-        private final Font foot = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL, GREY);
+        private final Font foot = new Font(TIMES_REGULAR, 12, Font.NORMAL, GREY);
 
         @Override
         public void onEndPage(PdfWriter writer, Document document) {
