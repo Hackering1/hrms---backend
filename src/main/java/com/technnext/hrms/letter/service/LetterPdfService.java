@@ -653,10 +653,17 @@ public class LetterPdfService {
     }
 
     private void addDateBlock(Document doc, LetterPdfRequest r) throws DocumentException {
-        Paragraph d = new Paragraph("Date: " + safe(r.letterDate()), BODY);
+        // Labels ("Date:"/"Place:") bold, values normal — matches the
+        // reference letter's convention; previously the whole line was
+        // plain BODY (no bold at all).
+        Paragraph d = new Paragraph();
+        d.add(new Chunk("Date: ", BODY_B));
+        d.add(new Chunk(safe(r.letterDate()), BODY));
         d.setAlignment(Element.ALIGN_RIGHT);
         doc.add(d);
-        Paragraph p = new Paragraph("Place: " + safe(r.place()), BODY);
+        Paragraph p = new Paragraph();
+        p.add(new Chunk("Place: ", BODY_B));
+        p.add(new Chunk(safe(r.place()), BODY));
         p.setAlignment(Element.ALIGN_RIGHT);
         doc.add(p);
     }
@@ -782,9 +789,20 @@ public class LetterPdfService {
         doc.add(p);
         // signature image if present, else blank space for manual signing
         addSignatureImageOrGap(doc, r.signatureFileId());
-        doc.add(new Paragraph("Name: " + safe(r.signatoryName()), BODY));
-        doc.add(new Paragraph("Designation: " + safe(r.signatoryTitle()), BODY));
-        doc.add(new Paragraph("Date: " + safe(r.letterDate()), BODY));
+        // Labels bold, values normal — matches reference; previously the
+        // whole "Name: X" / "Designation: X" / "Date: X" line was plain BODY.
+        Paragraph nameLine = new Paragraph();
+        nameLine.add(new Chunk("Name: ", BODY_B));
+        nameLine.add(new Chunk(safe(r.signatoryName()), BODY));
+        doc.add(nameLine);
+        Paragraph desigLine = new Paragraph();
+        desigLine.add(new Chunk("Designation: ", BODY_B));
+        desigLine.add(new Chunk(safe(r.signatoryTitle()), BODY));
+        doc.add(desigLine);
+        Paragraph dateLine = new Paragraph();
+        dateLine.add(new Chunk("Date: ", BODY_B));
+        dateLine.add(new Chunk(safe(r.letterDate()), BODY));
+        doc.add(dateLine);
     }
 
     /**
@@ -826,15 +844,24 @@ public class LetterPdfService {
         body.setSpacingAfter(10f);
         cell.addElement(body);
 
-        Paragraph sig = new Paragraph("Signature: ______________________________", BODY);
+        // Labels bold, blank/rule normal — matches reference; previously
+        // the whole line ("Signature: ___", "Date: ___", "Place: ___") was
+        // plain BODY with no bold at all.
+        Paragraph sig = new Paragraph();
+        sig.add(new Chunk("Signature: ", BODY_B));
+        sig.add(new Chunk("______________________________", BODY));
         sig.setSpacingAfter(7f);
         cell.addElement(sig);
 
-        Paragraph date = new Paragraph("Date: __________________________________", BODY);
+        Paragraph date = new Paragraph();
+        date.add(new Chunk("Date: ", BODY_B));
+        date.add(new Chunk("__________________________________", BODY));
         date.setSpacingAfter(7f);
         cell.addElement(date);
 
-        Paragraph place = new Paragraph("Place: __________________________________", BODY);
+        Paragraph place = new Paragraph();
+        place.add(new Chunk("Place: ", BODY_B));
+        place.add(new Chunk("__________________________________", BODY));
         cell.addElement(place);
 
         box.addCell(cell);
