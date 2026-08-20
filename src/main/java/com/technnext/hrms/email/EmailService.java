@@ -11,17 +11,22 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Base64;
 
 /**
  * Sends transactional emails for the HR portal via the Microsoft Graph API
  * (app-only / client-credentials auth), using the "TechNext HRMS Mailer"
  * Azure AD App Registration and the hr@technnext.com mailbox.
  *
- * IMPORTANT reliability rule: nothing in this class is allowed to throw. A
- * Graph/Azure AD outage, an expired secret, or a network hiccup must never
- * fail (or roll back) an employee-creation request — it is only logged, so
- * an admin can notice and re-send manually if needed. Callers can treat every
- * public method here as "fire and forget".
+ * IMPORTANT reliability rule: sendEmployeeWelcomeEmail/sendEmployeeInviteEmail
+ * are NOT allowed to throw. A Graph/Azure AD outage, an expired secret, or a
+ * network hiccup must never fail (or roll back) an employee-creation request
+ * — it is only logged, so an admin can notice and re-send manually if needed.
+ * Callers can treat those two methods as "fire and forget".
+ *
+ * sendLetterEmail() is the one exception to that rule (see its own doc
+ * comment) — it is a direct, user-initiated "Send Email" action, so its
+ * caller needs a real success/failure result and it deliberately does throw.
  */
 @Service
 @Slf4j
@@ -84,6 +89,17 @@ public class EmailService {
     }
 
     private void sendViaGraph(String toEmail, String subject, String htmlBody) throws Exception {
+        sendViaGraph(toEmail, subject, htmlBody, null, null);
+    }
+
+    /**
+     * Same Graph "sendMail" call as above, with an optional single file
+     * attachment (used by {@link #sendLetterEmail}). attachmentBytes/Filename
+     * are simply omitted from the payload when null/empty, so this overload
+     * behaves identically to the original for every existing caller.
+     */
+    private void sendViaGraph(String toEmail, String subject, String htmlBody,
+                               byte[] attachmentBytes, String attachmentFilename) throws Exception {
         String accessToken = graphTokenService.getAccessToken();
 
         ObjectNode emailAddress = objectMapper.createObjectNode();
@@ -99,6 +115,17 @@ public class EmailService {
         message.put("subject", subject);
         message.set("body", body);
         message.putArray("toRecipients").add(toRecipientEntry);
+
+        if (attachmentBytes != null && attachmentBytes.length > 0) {
+            ObjectNode attachment = objectMapper.createObjectNode();
+            attachment.put("@odata.type", "#microsoft.graph.fileAttachment");
+            attachment.put("name", attachmentFilename == null || attachmentFilename.isBlank()
+                    ? "attachment.pdf" : attachmentFilename);
+            attachment.put("contentType", "application/pdf");
+            attachment.put("contentBytes", Base64.getEncoder().encodeToString(attachmentBytes));
+            message.put("hasAttachments", true);
+            message.putArray("attachments").add(attachment);
+        }
 
         ObjectNode payload = objectMapper.createObjectNode();
         payload.set("message", message);
@@ -121,6 +148,34 @@ public class EmailService {
             throw new IllegalStateException(
                     "Microsoft Graph sendMail failed: HTTP " + response.statusCode()
                             + " — " + response.body());
+        }
+    }
+
+    /**
+     * Sends a generated letter PDF to the given recipient.
+     *
+     * UNLIKE sendEmployeeWelcomeEmail/sendEmployeeInviteEmail above, this
+     * method is NOT fire-and-forget — it is triggered directly by an HR user
+     * clicking "Send Email" on an already-generated letter, so the caller
+     * needs an accurate success/failure result to show them. Exceptions are
+     * intentionally allowed to propagate (after being logged) rather than
+     * swallowed.
+     */
+    public void sendLetterEmail(String toEmail, String subject, String htmlBody,
+                                 byte[] pdfBytes, String pdfFilename) {
+        if (!mailEnabled) {
+            throw new IllegalStateException(
+                    "Email sending is currently disabled for this environment (app.mail.enabled=false).");
+        }
+        if (toEmail == null || toEmail.isBlank()) {
+            throw new IllegalArgumentException("Recipient email is required.");
+        }
+        try {
+            sendViaGraph(toEmail, subject, htmlBody, pdfBytes, pdfFilename);
+            log.info("[EmailService] Letter email sent to {}", toEmail);
+        } catch (Exception ex) {
+            log.error("[EmailService] Failed to send letter email to {}: {}", toEmail, ex.getMessage(), ex);
+            throw new IllegalStateException("Failed to send letter email.", ex);
         }
     }
 

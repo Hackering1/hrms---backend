@@ -1,13 +1,18 @@
 package com.technnext.hrms.letter.controller;
 
+import com.technnext.hrms.common.ApiResponse;
+import com.technnext.hrms.common.exception.BadRequestException;
+import com.technnext.hrms.email.EmailService;
 import com.technnext.hrms.employee.dto.EmployeeContactDto;
 import com.technnext.hrms.employee.entity.Employee;
 import com.technnext.hrms.employee.repository.EmployeeRepository;
 import com.technnext.hrms.employee.service.EmployeeContactService;
+import com.technnext.hrms.letter.dto.LetterEmailRequest;
 import com.technnext.hrms.letter.dto.LetterPdfRequest;
 import com.technnext.hrms.letter.service.LetterPdfService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Generates a formatted Offer/Appointment/Relieving/Experience letter PDF and
@@ -38,33 +44,17 @@ public class LetterPdfController {
     private final LetterPdfService pdfService;
     private final EmployeeRepository employeeRepository;
     private final EmployeeContactService employeeContactService;
+    // NEW — reused as-is (existing Microsoft Graph mailer, same infra used
+    // for welcome/invite emails). No second email system is created.
+    private final EmailService emailService;
+
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}$");
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
     public ResponseEntity<byte[]> generate(@RequestBody LetterPdfRequest request) {
-        LetterPdfRequest enriched = request;
-
-        // Enrich gender from the employee record (frontend doesn't need to send it).
-        String gender = request.gender();
-        if ((gender == null || gender.isBlank()) && request.employeeId() != null) {
-            gender = employeeRepository.findById(request.employeeId())
-                    .map(Employee::getGender)
-                    .orElse(gender);
-        }
-
-        // Enrich current address from EmployeeContact (frontend doesn't need
-        // to send it, and typed-but-unmatched candidates simply have none).
-        String address = request.employeeAddress();
-        if ((address == null || address.isBlank()) && request.employeeId() != null) {
-            String looked = formatAddress(employeeContactService.getByEmployeeId(request.employeeId()));
-            if (looked != null) address = looked;
-        }
-
-        if (!java.util.Objects.equals(gender, request.gender())
-                || !java.util.Objects.equals(address, request.employeeAddress())) {
-            enriched = withEnrichment(request, gender, address);
-        }
-
+        LetterPdfRequest enriched = enrich(request);
         byte[] pdf = pdfService.generate(enriched);
         String filename = typeLabel(enriched.letterType()) + "_Letter_" +
                 (enriched.employeeName() == null ? "Employee"
@@ -75,6 +65,68 @@ public class LetterPdfController {
         headers.setContentDispositionFormData("attachment", filename);
         headers.setContentLength(pdf.length);
         return ResponseEntity.ok().headers(headers).body(pdf);
+    }
+
+    /**
+     * NEW — generates the exact same letter PDF as POST /api/letter-pdf
+     * (same enrich() + pdfService.generate() call, nothing duplicated) and
+     * emails it via the existing EmailService/Graph mailer instead of
+     * returning it for download. Same role restriction as generate() above,
+     * so this can never become reachable by an unauthenticated or
+     * unauthorized caller.
+     *
+     * Order matches the required flow: validate email -> generate PDF ->
+     * only then attempt to send. A PDF-generation failure never reaches the
+     * email step; an email failure never claims the PDF wasn't produced —
+     * the two are reported distinctly to the frontend.
+     */
+    @PostMapping("/send-email")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    public ResponseEntity<ApiResponse<String>> sendEmail(@RequestBody LetterEmailRequest request) {
+        String email = request.recipientEmail() == null ? "" : request.recipientEmail().trim();
+        if (email.isBlank() || !EMAIL_PATTERN.matcher(email).matches()) {
+            throw new BadRequestException("Please enter a valid email address.");
+        }
+        if (request.letter() == null) {
+            throw new BadRequestException("Letter details are required.");
+        }
+
+        LetterPdfRequest enriched = enrich(request.letter());
+
+        byte[] pdf;
+        try {
+            pdf = pdfService.generate(enriched);
+        } catch (Exception ex) {
+            // Never attempt to send on a failed/incomplete document.
+            throw new BadRequestException("Couldn't generate the letter — please check the entered details.");
+        }
+
+        String label = typeLabel(enriched.letterType()).replace('_', ' ');
+        String name = enriched.employeeName() == null || enriched.employeeName().isBlank()
+                ? "Candidate" : enriched.employeeName();
+        String filename = typeLabel(enriched.letterType()) + "_Letter_" +
+                name.replaceAll("\\s+", "_") + ".pdf";
+        String subject = label + " - " + name;
+        String htmlBody = "<p>Dear " + escapeHtml(name) + ",</p>"
+                + "<p>Please find attached your " + escapeHtml(label) + ".</p>"
+                + "<p>Regards,<br/>HR Team<br/>TechNext Technologies and Services Pvt Ltd</p>";
+
+        try {
+            emailService.sendLetterEmail(email, subject, htmlBody, pdf, filename);
+        } catch (Exception ex) {
+            // Never leak SMTP/Graph/internal error details to the client.
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(ApiResponse.error("Failed to send offer letter. Please try again."));
+        }
+
+        return ResponseEntity.ok(
+                ApiResponse.ok("Offer letter sent successfully to " + email + ".", email));
+    }
+
+    private String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     private String typeLabel(String type) {
@@ -120,6 +172,36 @@ public class LetterPdfController {
     }
 
     private boolean notBlank(String s) { return s != null && !s.isBlank(); }
+
+    /**
+     * Extracted, unchanged, from the original generate() body — enriches
+     * gender/address from the employee record when the frontend didn't
+     * already supply them. Used by both /api/letter-pdf and
+     * /api/letter-pdf/send-email so the enrichment logic exists in exactly
+     * one place.
+     */
+    private LetterPdfRequest enrich(LetterPdfRequest request) {
+        LetterPdfRequest enriched = request;
+
+        String gender = request.gender();
+        if ((gender == null || gender.isBlank()) && request.employeeId() != null) {
+            gender = employeeRepository.findById(request.employeeId())
+                    .map(Employee::getGender)
+                    .orElse(gender);
+        }
+
+        String address = request.employeeAddress();
+        if ((address == null || address.isBlank()) && request.employeeId() != null) {
+            String looked = formatAddress(employeeContactService.getByEmployeeId(request.employeeId()));
+            if (looked != null) address = looked;
+        }
+
+        if (!java.util.Objects.equals(gender, request.gender())
+                || !java.util.Objects.equals(address, request.employeeAddress())) {
+            enriched = withEnrichment(request, gender, address);
+        }
+        return enriched;
+    }
 
     /** Rebuilds the request with gender/address filled in (records are immutable). */
     private LetterPdfRequest withEnrichment(LetterPdfRequest r, String gender, String address) {
