@@ -127,7 +127,7 @@ public class LetterPdfService {
                 addDateBlock(doc, r);
                 addTitle(doc, "OFFER LETTER (Contract-to-Hire)");
                 addC2HRecipient(doc, r);
-                addC2HBody(doc, r);
+                addC2HBody(doc, r, writer);
                 addSalaryAnnexure(doc, r, false);
                 doc.close();
                 return out.toByteArray();
@@ -138,7 +138,7 @@ public class LetterPdfService {
             addTitle(doc, appointment ? "APPOINTMENT LETTER" : "OFFER LETTER");
             addRecipient(doc, r, appointment);
             if (appointment) addAppointmentBody(doc, r);
-            else addOfferBody(doc, r);
+            else addOfferBody(doc, r, writer);
             addSalaryAnnexure(doc, r, appointment);
             doc.close();
             return out.toByteArray();
@@ -384,16 +384,16 @@ public class LetterPdfService {
      * the same Authorized Signatory + Employee Acceptance blocks used by the
      * standard Offer Letter (reused, not duplicated).
      */
-    private void addC2HBody(Document doc, LetterPdfRequest r) throws DocumentException {
+    private void addC2HBody(Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
         String duration = safe(r.contractDuration()).trim();
         String unit = unitLabel(r.contractDurationUnit());
         String durationPhrase = duration.isBlank() ? "the agreed initial period" : duration + " " + unit;
 
         clause(doc, 1, "Appointment Details",
-                "You are being appointed as " + safe(r.designation()) +
-                " on a Contract-to-Hire basis for an initial period of " + durationPhrase +
-                ", commencing from " + safe(r.dateOfJoining()) + " and ending on " + safe(r.employmentEndDate()) +
-                ", unless terminated earlier in accordance with this letter. Your work location shall be " +
+                "You are being appointed as **" + safe(r.designation()) +
+                "** on a Contract-to-Hire basis for an initial period of **" + durationPhrase +
+                "**, commencing from **" + safe(r.dateOfJoining()) + "** and ending on **" + safe(r.employmentEndDate()) +
+                "**, unless terminated earlier in accordance with this letter. Your work location shall be " +
                 safe(r.workLocation()) + ", and you will report to a person designated by the Company or the client organization.");
 
         clause(doc, 2, "Nature of Employment",
@@ -405,9 +405,9 @@ public class LetterPdfService {
                 "at the discretion of the Company and/or the client and shall be communicated in writing.");
 
         clause(doc, 3, "Compensation",
-                "Your Annualized Cost to Company (CTC) shall be INR " + safe(r.ctcAnnual()) +
-                (r.ctcInWords() != null && !r.ctcInWords().isBlank() ? " (" + r.ctcInWords() + ")" : "") +
-                ". The detailed salary structure and applicable statutory deductions are provided in Annexure-A. " +
+                "Your Annualized Cost to Company (CTC) shall be **INR " + safe(r.ctcAnnual()) +
+                (r.ctcInWords() != null && !r.ctcInWords().isBlank() ? " (" + r.ctcInWords() + ")" : "") + "**" +
+                ". The detailed salary structure and applicable statutory deductions are provided in **Annexure-A**. " +
                 "Statutory deductions, including Provident Fund (PF), Professional Tax (PT), and Tax Deducted at Source " +
                 "(TDS), if applicable, shall be made in accordance with prevailing laws and regulations.");
 
@@ -446,7 +446,7 @@ public class LetterPdfService {
                 "Technologies and Services Private Limited.");
 
         addSignatory(doc, r);
-        addEmployeeAcceptance(doc, r);
+        addEmployeeAcceptance(doc, r, writer);
     }
 
     /**
@@ -766,24 +766,38 @@ public class LetterPdfService {
         }
     }
 
+    /**
+     * Renders a numbered clause. `body` supports simple **bold** markers
+     * (e.g. "appointed as **Software Engineer** for **6 months**") which are
+     * split into bold/normal Chunks matching the reference letter's inline
+     * emphasis (designation, dates, CTC amount, etc.) — a plain string with
+     * no ** markers renders exactly as before, so every existing call site
+     * is unaffected until it opts in by adding markers.
+     */
     private void clause(Document doc, int n, String title, String body) throws DocumentException {
         Paragraph t = new Paragraph(n + ". " + title, CLAUSE_T);
         t.setSpacingBefore(8f);
         t.setSpacingAfter(2f);
         doc.add(t);
-        Paragraph b = new Paragraph(body, BODY);
+        Paragraph b = new Paragraph();
         b.setAlignment(Element.ALIGN_JUSTIFIED);
         b.setSpacingAfter(4f);
+        String[] parts = body.split("\\*\\*", -1);
+        // Odd indices (1, 3, 5...) are the text that was between ** markers.
+        for (int i = 0; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            b.add(new Chunk(parts[i], i % 2 == 1 ? BODY_B : BODY));
+        }
         doc.add(b);
     }
 
-    private void addOfferBody(Document doc, LetterPdfRequest r) throws DocumentException {
-        clause(doc, 1, "Appointment Details", "You are offered the position of " + safe(r.designation()) +
-                " on a " + employmentBasisPhrase(r) + ". Your work location shall be " + safe(r.workLocation()) +
-                ". Your date of joining will be " + safe(r.dateOfJoining()) + ", and you will report to a person assigned by the Company.");
+    private void addOfferBody(Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
+        clause(doc, 1, "Appointment Details", "You are offered the position of **" + safe(r.designation()) +
+                "** on a " + employmentBasisPhrase(r) + ". Your work location shall be " + safe(r.workLocation()) +
+                ". Your date of joining will be **" + safe(r.dateOfJoining()) + "**, and you will report to a person assigned by the Company.");
         clause(doc, 2, "Probation", "You will be on probation for a period of six (6) months from your date of joining. Your performance, conduct, and suitability will be reviewed during this period. Confirmation of employment is not automatic and will be communicated in writing by the Company.");
-        clause(doc, 3, "Compensation", "Your Annual Cost to Company (CTC) will be INR " + safe(r.ctcAnnual()) +
-                ". The detailed salary structure and breakup are provided in Annexure-A. Statutory deductions such as PF, Professional Tax, and TDS shall apply as per applicable laws." +
+        clause(doc, 3, "Compensation", "Your Annual Cost to Company (CTC) will be **INR " + safe(r.ctcAnnual()) + "**" +
+                ". The detailed salary structure and breakup are provided in **Annexure-A**. Statutory deductions such as PF, Professional Tax, and TDS shall apply as per applicable laws." +
                 (hasVariablePay(r)
                         ? " Your compensation includes a Variable Pay component, as detailed in Annexure-A."
                         : " There is no variable pay or joining bonus applicable for this role."));
@@ -794,16 +808,16 @@ public class LetterPdfService {
         clause(doc, 8, "Confidentiality and Intellectual Property", "You shall maintain strict confidentiality of Company and client information during and after employment. All work, data, and intellectual property created during your employment shall be the sole property of the Company.");
         clause(doc, 9, "Acceptance of Offer", "This offer is valid for five (5) working days from the date of issue. Please sign and return a copy of this letter as a token of acceptance.");
         addSignatory(doc, r);
-        addEmployeeAcceptance(doc, r);
+        addEmployeeAcceptance(doc, r, writer);
     }
 
     private void addAppointmentBody(Document doc, LetterPdfRequest r) throws DocumentException {
-        clause(doc, 1, "Appointment and Role", "You are appointed as a " + employmentTypeNoun(r) + " of the Company in the role of " + safe(r.designation()) +
-                " and shall be based at " + safe(r.workLocation()) + ". You will report to such person as may be designated by the Company. Your roles and responsibilities shall be assigned and modified from time to time based on business requirements. You shall devote your full working time, attention, and abilities to the business of the Company and shall not engage in any other employment, assignment, or business activity without prior written consent.");
+        clause(doc, 1, "Appointment and Role", "You are appointed as a " + employmentTypeNoun(r) + " of the Company in the role of **" + safe(r.designation()) +
+                "** and shall be based at " + safe(r.workLocation()) + ". You will report to such person as may be designated by the Company. Your roles and responsibilities shall be assigned and modified from time to time based on business requirements. You shall devote your full working time, attention, and abilities to the business of the Company and shall not engage in any other employment, assignment, or business activity without prior written consent.");
         clause(doc, 2, "Probation", "You shall be on probation for a period of six (6) months from the date of joining. During this period, your performance, conduct, and suitability for the role will be evaluated. The Company reserves the right to extend, curtail, or terminate the probation period at its sole discretion. Confirmation of your employment shall be communicated in writing and shall not be deemed automatic.");
-        clause(doc, 3, "Compensation", "Your annual Cost to Company (CTC) shall be \u20B9" + safe(r.ctcAnnual()) +
-                (r.ctcInWords() != null && !r.ctcInWords().isBlank() ? " (" + r.ctcInWords() + ")" : "") +
-                ". Your salary shall be paid on a monthly basis and shall be subject to statutory deductions including Provident Fund, Professional Tax, and Income Tax, as applicable under prevailing laws. The detailed salary structure is provided in Annexure-A attached hereto and forms an integral part of this appointment letter. The Company reserves the right to revise or restructure your compensation based on performance, business requirements, or statutory changes.");
+        clause(doc, 3, "Compensation", "Your annual Cost to Company (CTC) shall be **\u20B9" + safe(r.ctcAnnual()) +
+                (r.ctcInWords() != null && !r.ctcInWords().isBlank() ? " (" + r.ctcInWords() + ")" : "") + "**" +
+                ". Your salary shall be paid on a monthly basis and shall be subject to statutory deductions including Provident Fund, Professional Tax, and Income Tax, as applicable under prevailing laws. The detailed salary structure is provided in **Annexure-A** attached hereto and forms an integral part of this appointment letter. The Company reserves the right to revise or restructure your compensation based on performance, business requirements, or statutory changes.");
         clause(doc, 4, "Duties and Responsibilities", "You shall perform your duties diligently, efficiently, and in the best interests of the Company. You are required to comply with all lawful instructions issued by the Company and maintain the highest standards of integrity, discipline, and professionalism. You shall not accept any commission, benefit, or gratification from any third party in connection with Company business.");
         clause(doc, 5, "Company Policies", "Your employment shall be governed by the policies, rules, and regulations of the Company, including but not limited to the code of conduct, leave policy, IT and data security policies, and disciplinary procedures. These policies may be amended from time to time, and you shall be required to comply with such amendments.");
         clause(doc, 6, "Working Hours and Leave", "Your working hours shall ordinarily be eight to nine (8-9) hours per day for five working days a week. You may be required to work beyond standard working hours based on business requirements without additional compensation. You shall be entitled to leave as per the Company's leave policy in force from time to time. All leave requests must be approved in advance except in cases of genuine emergencies.");
@@ -846,16 +860,32 @@ public class LetterPdfService {
      * r.employeeName() value already used throughout the letter (Recipient,
      * Annexure-A, etc.) — never a separate/hardcoded name.
      *
-     * Wrapped in a single-cell, borderless PdfPTable with setKeepTogether(true)
-     * so this section is never split mid-way across a page boundary. This is
-     * a safety net only, not the cause of the section jumping to a new page —
-     * that was the spacing above being generous enough that there often wasn't
-     * room left on the current page. The spacing here (and in addSignatory /
-     * addSignatureImageOrGap above) was tightened specifically so the combined
-     * HR Director + Employee Acceptance block fits in the space actually
-     * available, so keepTogether rarely needs to trigger at all in practice.
+     * Explicitly checks the ACTUAL remaining space on the page (via the
+     * PdfWriter) before deciding whether this needs a fresh page, rather
+     * than relying solely on PdfPTable's own setKeepTogether(true)
+     * space-estimation — real generated letters showed that heuristic
+     * pushing this section onto its own near-empty page even when a large
+     * gap was clearly visible above it. setKeepTogether(true) is still kept
+     * as a safety net for the (now rare) case this estimate is close, so
+     * the block is never split awkwardly mid-way even if it does need to
+     * move to a new page.
      */
-    private void addEmployeeAcceptance(Document doc, LetterPdfRequest r) throws DocumentException {
+    private void addEmployeeAcceptance(Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
+        // Rough but deliberately generous estimate of this block's printed
+        // height: heading + intro line (up to 2 wrapped lines) + 3 signature
+        // lines, each with their own leading/spacing — see the literal
+        // spacingAfter/font-size values used below. Overestimating here only
+        // costs an occasional harmless extra page break; underestimating is
+        // what would let content spill past the footer.
+        float estimatedHeight = 16f + 5f          // heading + its spacing
+                + (2 * 12f * 1.2f) + 10f          // intro line, up to 2 lines wrapped, + spacing
+                + (12f * 1.2f + 7f) * 2           // Signature / Date lines + spacing
+                + (12f * 1.2f);                    // Place line (no trailing spacing)
+        float availableHeight = writer.getVerticalPosition(true) - doc.bottomMargin();
+        if (availableHeight < estimatedHeight) {
+            doc.newPage();
+        }
+
         PdfPTable box = new PdfPTable(1);
         box.setWidthPercentage(100);
         box.setKeepTogether(true);
