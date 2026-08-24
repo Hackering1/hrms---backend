@@ -968,12 +968,12 @@ public class LetterPdfService {
         row(t, "iv", "Special Allowance", r.specialM(), r.specialA());
         totalRow(t, "Gross Salary (E)", r.grossM(), r.grossA(), LIGHTBLUE);
         sectionRow(t, "B", "Employee Deductions");
-        row(t, "i", "Employee PF (Fixed)", r.pfEmployeeM(), r.pfEmployeeA());
+        row(t, "i", "Employee PF", r.pfEmployeeM(), r.pfEmployeeA());
         row(t, "ii", "Professional Tax (KA)", r.ptM(), r.ptA());
         totalRow(t, "Total Deductions (D)", r.deductionsM(), r.deductionsA(), LIGHTBLUE);
         totalRowBlue(t, "Net Take Home (Before TDS)", r.netM(), r.netA());
         sectionRow(t, "D", "Employer Costs Included in CTC");
-        row(t, "i", "Employer PF (Fixed)", r.pfEmployerM(), r.pfEmployerA());
+        row(t, "i", "Employer PF", r.pfEmployerM(), r.pfEmployerA());
         row(t, "ii", "Gratuity (4.81% of Basic)", r.gratuityM(), r.gratuityA());
         row(t, "iii", "Group Health/Accident Insurance", r.insuranceM(), r.insuranceA());
         if (hasVariablePay(r)) {
