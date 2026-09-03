@@ -112,6 +112,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         System.err.println("[ERROR] Data integrity violation: " + ex.getMessage());
+        String cause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : "";
+        // BUGFIX: a unique-constraint violation on INSERT (e.g. two Invite
+        // Employee submissions using the same employee code at almost the
+        // same instant — the true race-condition case, since the app-level
+        // existsByEmployeeCode() check can't see an insert that's still
+        // mid-flight in another request) used to fall into the generic
+        // "can't delete" message below, which is wrong and confusing for a
+        // create action. Give it its own accurate message instead. Detection
+        // is by column name in the DB driver's error detail, not a specific
+        // constraint name, so it works regardless of how the constraint was
+        // created (ddl-auto is "none" here — schema is managed manually).
+        if (cause != null && cause.toLowerCase().contains("employee_code")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("That employee code was just taken by another invitation submitted " +
+                            "at the same time. Please refresh the page and try again with the next available code."));
+        }
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("Can't permanently delete this record — it still has related history " +
                         "(attendance, leave, approvals, uploaded documents, or audit entries) referencing it. " +
