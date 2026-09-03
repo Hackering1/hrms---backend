@@ -114,9 +114,12 @@ public class LetterPdfController {
         // untouched, not just unaffected by coincidence.
         String role = enriched.designation() == null || enriched.designation().isBlank()
                 ? null : enriched.designation().trim();
-        String sender = enriched.signatoryName() == null || enriched.signatoryName().isBlank()
-                ? "HR Team" : enriched.signatoryName().trim();
-        EmailCopy copy = emailCopyFor(enriched.letterType(), label, name, role, sender);
+        // Reuses the exact same gender-detection pattern LetterPdfService
+        // already applies for pronouns in the PDF itself (startsWith "M"/"F",
+        // case-insensitive) — same field, same convention, no new logic.
+        String g = enriched.gender() == null ? "" : enriched.gender().trim().toUpperCase();
+        String title = g.startsWith("M") ? "Mr. " : g.startsWith("F") ? "Ms. " : "";
+        EmailCopy copy = emailCopyFor(enriched.letterType(), label, name, role, title);
 
         String subject = copy.subject();
         String htmlBody = copy.body();
@@ -142,31 +145,34 @@ public class LetterPdfController {
     private record EmailCopy(String subject, String body) {}
 
     /**
-     * Builds the subject + HTML body for Offer/C2H/Appointment emails, with
-     * the exact wording requested:
+     * Builds the subject + HTML body for Offer/C2H/Appointment emails.
+     * Subject:
      *   Offer:        "Offer of Employment – {role} | {company}"
      *   C2H:          "Contract Offer – {role} | {company}"
      *   Appointment:  "Appointment Letter – {role} | {company}"
+     * Body follows the exact wording requested (greeting + warm closing,
+     * candidate name/role/letter-type dynamically inserted, no signatory
+     * name — signs off simply as "HR" per spec).
      * Any other type falls back to the original, unchanged "Label - Name"
      * subject and plain body — this method only branches for the 3 types
      * above; everything else returns the pre-existing copy untouched.
      */
-    private EmailCopy emailCopyFor(String letterType, String label, String name, String role, String sender) {
+    private EmailCopy emailCopyFor(String letterType, String label, String name, String role, String title) {
         String type = letterType == null ? "" : letterType.toUpperCase();
         String subjectPrefix;
-        String letterTypePhrase;
+        String typePhrase; // lowercase, used inline in body sentences
         switch (type) {
             case "OFFER":
                 subjectPrefix = "Offer of Employment";
-                letterTypePhrase = "Offer Letter";
+                typePhrase = "offer letter";
                 break;
             case "C2H":
                 subjectPrefix = "Contract Offer";
-                letterTypePhrase = "Contract Offer Letter";
+                typePhrase = "contract offer letter";
                 break;
             case "APPOINTMENT":
                 subjectPrefix = "Appointment Letter";
-                letterTypePhrase = "Appointment Letter";
+                typePhrase = "appointment letter";
                 break;
             default:
                 // Relieving / Experience / Internship / anything else —
@@ -182,18 +188,24 @@ public class LetterPdfController {
                 ? subjectPrefix + " | " + COMPANY_NAME
                 : subjectPrefix + " \u2013 " + role + " | " + COMPANY_NAME;
 
-        String positionLine = role == null
-                ? "Please find attached your " + escapeHtml(letterTypePhrase) + " from "
-                        + escapeHtml(COMPANY_NAME) + "."
-                : "Please find attached your " + escapeHtml(letterTypePhrase)
-                        + " for the position of " + escapeHtml(role) + " at "
-                        + escapeHtml(COMPANY_NAME) + ".";
+        String shareLine = role == null
+                ? "We are pleased to share with you the " + escapeHtml(typePhrase)
+                        + " with our organization. The " + escapeHtml(typePhrase)
+                        + " is attached herewith for your review."
+                : "We are pleased to share with you the " + escapeHtml(typePhrase)
+                        + " for the position of " + escapeHtml(role) + " with our organization. The "
+                        + escapeHtml(typePhrase) + " is attached herewith for your review.";
 
-        String body = "<p>Dear " + escapeHtml(name) + ",</p>"
-                + "<p>" + positionLine + "</p>"
-                + "<p>We are pleased to share this document with you and request you to review the details carefully.</p>"
-                + "<p>Please find the letter attached to this email.</p>"
-                + "<p>Regards,<br/>" + escapeHtml(sender) + "<br/>" + escapeHtml(COMPANY_NAME) + "</p>";
+        String body = "<p>Dear " + escapeHtml(title) + escapeHtml(name) + ",</p>"
+                + "<p>Greetings from " + escapeHtml(COMPANY_NAME) + "!</p>"
+                + "<p>" + shareLine + "</p>"
+                + "<p>Kindly go through the terms and conditions and confirm your acceptance by signing "
+                + "and sharing a scanned copy of the document within 24 hours of receiving this email.</p>"
+                + "<p>Should you have any questions or require any further clarification, please feel free "
+                + "to reach out to us.</p>"
+                + "<p>We look forward to welcoming you to the TechNext team and wish you a successful "
+                + "journey with us.</p>"
+                + "<p>Warm regards,<br/>Thanks,<br/>HR</p>";
 
         return new EmailCopy(subject, body);
     }
