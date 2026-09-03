@@ -106,10 +106,20 @@ public class LetterPdfController {
                 ? "Candidate" : enriched.employeeName();
         String filename = typeLabel(enriched.letterType()) + "_Letter_" +
                 name.replaceAll("\\s+", "_") + ".pdf";
-        String subject = label + " - " + name;
-        String htmlBody = "<p>Dear " + escapeHtml(name) + ",</p>"
-                + "<p>Please find attached your " + escapeHtml(label) + ".</p>"
-                + "<p>Regards,<br/>HR Team<br/>TechNext Technologies and Services Pvt Ltd</p>";
+
+        // NEW — dynamic subject/body for Offer, Contract Offer (C2H), and
+        // Appointment letters only (the 3 types explicitly asked for). Every
+        // other letter type (Relieving/Experience/Internship) keeps the
+        // original "Label - Name" subject and plain body exactly as before —
+        // untouched, not just unaffected by coincidence.
+        String role = enriched.designation() == null || enriched.designation().isBlank()
+                ? null : enriched.designation().trim();
+        String sender = enriched.signatoryName() == null || enriched.signatoryName().isBlank()
+                ? "HR Team" : enriched.signatoryName().trim();
+        EmailCopy copy = emailCopyFor(enriched.letterType(), label, name, role, sender);
+
+        String subject = copy.subject();
+        String htmlBody = copy.body();
 
         try {
             emailService.sendLetterEmail(email, subject, htmlBody, pdf, filename);
@@ -121,6 +131,71 @@ public class LetterPdfController {
 
         return ResponseEntity.ok(
                 ApiResponse.ok("Offer letter sent successfully to " + email + ".", email));
+    }
+
+    // NEW — the one place the company's legal name is used for email text.
+    // Deliberately NOT a refactor of LetterPdfService's own (separately)
+    // hardcoded copies of this same string in the PDF body — this constant
+    // only feeds the email subject/body built in this controller.
+    private static final String COMPANY_NAME = "TechNext Technologies and Services Private Limited";
+
+    private record EmailCopy(String subject, String body) {}
+
+    /**
+     * Builds the subject + HTML body for Offer/C2H/Appointment emails, with
+     * the exact wording requested:
+     *   Offer:        "Offer of Employment – {role} | {company}"
+     *   C2H:          "Contract Offer – {role} | {company}"
+     *   Appointment:  "Appointment Letter – {role} | {company}"
+     * Any other type falls back to the original, unchanged "Label - Name"
+     * subject and plain body — this method only branches for the 3 types
+     * above; everything else returns the pre-existing copy untouched.
+     */
+    private EmailCopy emailCopyFor(String letterType, String label, String name, String role, String sender) {
+        String type = letterType == null ? "" : letterType.toUpperCase();
+        String subjectPrefix;
+        String letterTypePhrase;
+        switch (type) {
+            case "OFFER":
+                subjectPrefix = "Offer of Employment";
+                letterTypePhrase = "Offer Letter";
+                break;
+            case "C2H":
+                subjectPrefix = "Contract Offer";
+                letterTypePhrase = "Contract Offer Letter";
+                break;
+            case "APPOINTMENT":
+                subjectPrefix = "Appointment Letter";
+                letterTypePhrase = "Appointment Letter";
+                break;
+            default:
+                // Relieving / Experience / Internship / anything else —
+                // original behavior, byte-for-byte.
+                String oldSubject = label + " - " + name;
+                String oldBody = "<p>Dear " + escapeHtml(name) + ",</p>"
+                        + "<p>Please find attached your " + escapeHtml(label) + ".</p>"
+                        + "<p>Regards,<br/>HR Team<br/>TechNext Technologies and Services Pvt Ltd</p>";
+                return new EmailCopy(oldSubject, oldBody);
+        }
+
+        String subject = role == null
+                ? subjectPrefix + " | " + COMPANY_NAME
+                : subjectPrefix + " \u2013 " + role + " | " + COMPANY_NAME;
+
+        String positionLine = role == null
+                ? "Please find attached your " + escapeHtml(letterTypePhrase) + " from "
+                        + escapeHtml(COMPANY_NAME) + "."
+                : "Please find attached your " + escapeHtml(letterTypePhrase)
+                        + " for the position of " + escapeHtml(role) + " at "
+                        + escapeHtml(COMPANY_NAME) + ".";
+
+        String body = "<p>Dear " + escapeHtml(name) + ",</p>"
+                + "<p>" + positionLine + "</p>"
+                + "<p>We are pleased to share this document with you and request you to review the details carefully.</p>"
+                + "<p>Please find the letter attached to this email.</p>"
+                + "<p>Regards,<br/>" + escapeHtml(sender) + "<br/>" + escapeHtml(COMPANY_NAME) + "</p>";
+
+        return new EmailCopy(subject, body);
     }
 
     private String escapeHtml(String s) {
