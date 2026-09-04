@@ -65,9 +65,53 @@ public class EmployeeService {
     public List<EmployeeResponse> getAll(boolean includeDeleted) {
         return employeeRepository.findAll().stream()
                 .filter(e -> includeDeleted || !"DELETED".equalsIgnoreCase(e.getStatus()))
+                .sorted(BY_EMPLOYEE_CODE)
                 .map(this::toResponse)
                 .toList();
     }
+
+    // NEW — ascending Employee ID ordering, applied once at the single shared
+    // source every employee list/dropdown/table in the app reads from
+    // (GET /employees, backing All Employees, Invite Employee's manager
+    // picker, Documents, Attendance/Leave/Regularization employee pickers,
+    // etc.) so every consumer gets correct order for free with no per-page
+    // changes. Compares the NUMERIC part of the code (reusing the same
+    // trailing-digits pattern generateEmployeeCode() already uses) so
+    // "TN 010" correctly sorts after "TN 009" and before "TN 011" — plain
+    // string sort would put "TN 010"/"TN 011" before "TN 002" etc. Codes
+    // that don't end in digits fall back to a safe plain string compare and
+    // never throw. Purely an in-memory sort of the response list — no stored
+    // data, no schema, and no other query changed.
+    private static final java.util.regex.Pattern CODE_NUMBER = java.util.regex.Pattern.compile("(\\d+)\\s*$");
+
+    private static Long extractCodeNumber(String code) {
+        if (code == null) return null;
+        java.util.regex.Matcher m = CODE_NUMBER.matcher(code.trim());
+        if (m.find()) {
+            try {
+                return Long.parseLong(m.group(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static final java.util.Comparator<Employee> BY_EMPLOYEE_CODE = (a, b) -> {
+        Long na = extractCodeNumber(a.getEmployeeCode());
+        Long nb = extractCodeNumber(b.getEmployeeCode());
+        if (na != null && nb != null) {
+            int cmp = Long.compare(na, nb);
+            if (cmp != 0) return cmp;
+        } else if (na != null) {
+            return -1;
+        } else if (nb != null) {
+            return 1;
+        }
+        String ca = a.getEmployeeCode() == null ? "" : a.getEmployeeCode();
+        String cb = b.getEmployeeCode() == null ? "" : b.getEmployeeCode();
+        return ca.compareToIgnoreCase(cb);
+    };
     @Transactional(readOnly = true)
     public EmployeeResponse getById(UUID id) {
         return toResponse(findOrThrow(id));
@@ -81,7 +125,9 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public List<EmployeeResponse> getByIds(java.util.Collection<UUID> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
-        return employeeRepository.findAllById(ids).stream().map(this::toResponse).toList();
+        return employeeRepository.findAllById(ids).stream()
+                .sorted(BY_EMPLOYEE_CODE)
+                .map(this::toResponse).toList();
     }
 
     /**
