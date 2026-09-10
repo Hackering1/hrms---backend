@@ -31,4 +31,10 @@ public class EmployeeWelcomeEmailListener {
     public void onEmployeeInviteEmail(EmployeeInviteEmailEvent event) {
         emailService.sendEmployeeInviteEmail(event);
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPayslipEmail(PayslipEmailEvent event) {
+        emailService.sendPayslipEmail(event);
+    }
 }

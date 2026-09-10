@@ -151,6 +151,17 @@ public class EmailService {
         }
     }
 
+    /** A small immutable holder for a single email attachment (name, MIME type, raw bytes).
+     *  Used by {@link #sendPayslipEmail} — an ergonomic wrapper around the existing
+     *  byte[]/filename overload above, not a second attachment-sending mechanism. */
+    public record Attachment(String fileName, String contentType, byte[] bytes) {}
+
+    private void sendViaGraph(String toEmail, String subject, String htmlBody, Attachment attachment) throws Exception {
+        sendViaGraph(toEmail, subject, htmlBody,
+                attachment == null ? null : attachment.bytes(),
+                attachment == null ? null : attachment.fileName());
+    }
+
     /**
      * Sends a generated letter PDF to the given recipient.
      *
@@ -177,6 +188,57 @@ public class EmailService {
             log.error("[EmailService] Failed to send letter email to {}: {}", toEmail, ex.getMessage(), ex);
             throw new IllegalStateException("Failed to send letter email.", ex);
         }
+    }
+
+    /**
+     * Emails an employee their payslip PDF as an attachment. Fire-and-forget,
+     * same reliability contract as sendEmployeeWelcomeEmail/sendEmployeeInviteEmail:
+     * a mail failure is logged, never thrown — it must not affect the payroll
+     * run that triggered it (which has already been marked PAID by this point).
+     */
+    public void sendPayslipEmail(PayslipEmailEvent event) {
+        if (!mailEnabled) {
+            log.info("[EmailService] Mail sending is disabled (app.mail.enabled=false); " +
+                    "skipping payslip email to {}", event.toEmail());
+            return;
+        }
+        if (event.toEmail() == null || event.toEmail().isBlank()) {
+            log.warn("[EmailService] No email address on file for employee {}; skipping payslip email.",
+                    event.employeeCode());
+            return;
+        }
+        try {
+            String monthYear = event.monthLabel() + " " + event.year();
+            String subject = "Payslip for " + monthYear + " — " + companyName;
+            String htmlBody = buildPayslipHtmlBody(event, monthYear);
+            Attachment attachment = new Attachment(
+                    "Payslip_" + event.monthLabel() + "_" + event.year() + ".pdf",
+                    "application/pdf",
+                    event.pdfBytes());
+            sendViaGraph(event.toEmail(), subject, htmlBody, attachment);
+            log.info("[EmailService] Payslip email sent to {} for employee {} ({})",
+                    event.toEmail(), event.employeeCode(), monthYear);
+        } catch (Exception ex) {
+            log.error("[EmailService] Failed to send payslip email to {} for employee {}: {}",
+                    event.toEmail(), event.employeeCode(), ex.getMessage(), ex);
+        }
+    }
+
+    private String buildPayslipHtmlBody(PayslipEmailEvent event, String monthYear) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2937;\">");
+        sb.append("<p>Dear ").append(escape(event.employeeName())).append(",</p>");
+        sb.append("<p>Your payslip for <strong>").append(escape(monthYear)).append("</strong> is attached to this email.</p>");
+        sb.append("<table style=\"border-collapse:collapse;width:100%;margin:16px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;\">");
+        sb.append(row("Employee ID", event.employeeCode()));
+        sb.append(row("Net Pay", "\u20B9" + event.netPayFormatted()));
+        sb.append("</table>");
+        sb.append("<p style=\"color:#6b7280;font-size:13px;\">This is a system-generated email. For any queries about " +
+                "your salary, please reach out to your HR administrator. Do not reply to this email.</p>");
+        sb.append("<p style=\"margin-top:24px;color:#6b7280;font-size:13px;\">— ")
+                .append(escape(companyName)).append(" HR Team</p>");
+        sb.append("</div>");
+        return sb.toString();
     }
 
     private String buildHtmlBody(EmployeeWelcomeEmailEvent event) {

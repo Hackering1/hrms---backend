@@ -11,6 +11,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Integer>
     Optional<Attendance> findByEmployeeIdAndAttendanceDate(UUID employeeId, LocalDate attendanceDate);
     List<Attendance> findByEmployeeIdOrderByAttendanceDateDesc(UUID employeeId);
     List<Attendance> findByAttendanceDate(LocalDate attendanceDate);
+    // Payroll LOP calculation: an employee's attendance rows for one payroll month.
+    List<Attendance> findByEmployeeIdAndAttendanceDateBetween(UUID employeeId, LocalDate from, LocalDate to);
     // File-access checks: which attendance rows reference a given photo file id.
     List<Attendance> findByCheckInPhotoId(UUID checkInPhotoId);
     List<Attendance> findByCheckOutPhotoId(UUID checkOutPhotoId);
