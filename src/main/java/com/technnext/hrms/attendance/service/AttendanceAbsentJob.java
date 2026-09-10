@@ -4,6 +4,8 @@ import com.technnext.hrms.attendance.entity.Attendance;
 import com.technnext.hrms.attendance.repository.AttendanceRepository;
 import com.technnext.hrms.employee.entity.Employee;
 import com.technnext.hrms.employee.repository.EmployeeRepository;
+import com.technnext.hrms.leave.entity.LeaveRequest;
+import com.technnext.hrms.leave.repository.LeaveRequestRepository;
 import com.technnext.hrms.organization.entity.Holiday;
 import com.technnext.hrms.organization.repository.HolidayRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class AttendanceAbsentJob {
     private final EmployeeRepository employeeRepository;
     private final AttendanceRepository attendanceRepository;
     private final HolidayRepository holidayRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     /**
      * Runs every day at 00:30 server time and marks the previous day.
@@ -85,6 +88,13 @@ public class AttendanceAbsentJob {
             if (emp.getDateOfJoining() != null && day.isBefore(emp.getDateOfJoining())) {
                 continue;
             }
+            // BUGFIX: skip days covered by an APPROVED leave — an approved leave
+            // must never be turned into ABSENT (matches AttendanceService's
+            // read-time correction, and keeps the stored row from ever going
+            // wrong in the first place for new dates).
+            if (hasApprovedLeave(emp.getId(), day)) {
+                continue;
+            }
 
             Optional<Attendance> existing =
                     attendanceRepository.findByEmployeeIdAndAttendanceDate(emp.getId(), day);
@@ -121,5 +131,17 @@ public class AttendanceAbsentJob {
             }
         }
         return affected;
+    }
+
+    private boolean hasApprovedLeave(java.util.UUID employeeId, LocalDate day) {
+        List<LeaveRequest> leaves = leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId);
+        for (LeaveRequest l : leaves) {
+            if ("APPROVED".equalsIgnoreCase(l.getStatus())
+                    && !day.isBefore(l.getFromDate())
+                    && !day.isAfter(l.getToDate())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

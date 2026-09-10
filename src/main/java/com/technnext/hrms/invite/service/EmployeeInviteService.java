@@ -133,6 +133,27 @@ public class EmployeeInviteService {
         }
         invite.setStatus("CANCELLED");
         inviteRepository.save(invite);
+
+        // BUGFIX ("Employee code already exists"): cancelling used to only flip
+        // this invite record's status — the employee shell created by Send
+        // Invitation (which is what actually holds the employee_code) was
+        // silently left behind forever, permanently burning that code for
+        // every future invite attempt. A cancelled invite that was NEVER
+        // completed (onboardingStatus still INVITED) has no real HR history
+        // yet — no attendance/payroll/letters/login are created until
+        // onboarding actually finishes (see createInviteShell's own doc
+        // comment) — so it's safe to fully remove it here, as part of this
+        // same explicit, admin-initiated cancel action, freeing the employee
+        // code for reuse. If the candidate somehow already completed
+        // onboarding in the meantime (onboardingStatus flipped to ACTIVE),
+        // this is skipped entirely and the real employee record is untouched.
+        employeeRepository.findById(invite.getEmployeeId()).ifPresent(shell -> {
+            if ("INVITED".equalsIgnoreCase(shell.getOnboardingStatus())) {
+                employeeManagerRepository.deleteAll(
+                        employeeManagerRepository.findByEmployeeId(shell.getId()));
+                employeeRepository.delete(shell);
+            }
+        });
     }
 
     // =========================================================================

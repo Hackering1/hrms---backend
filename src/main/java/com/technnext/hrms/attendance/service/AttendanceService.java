@@ -7,6 +7,8 @@ import com.technnext.hrms.attendance.repository.AttendanceLogRepository;
 import com.technnext.hrms.attendance.repository.AttendanceRepository;
 import com.technnext.hrms.common.exception.BadRequestException;
 import com.technnext.hrms.common.exception.ResourceNotFoundException;
+import com.technnext.hrms.leave.entity.LeaveRequest;
+import com.technnext.hrms.leave.repository.LeaveRequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,15 +24,52 @@ import java.util.UUID;
 public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final AttendanceLogRepository logRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     /** Minimum hours that must be worked for a day to count as PRESENT (else ABSENT). */
     private static final double MIN_PRESENT_HOURS = 4.0;
 
+    /**
+     * BUGFIX: an APPROVED leave for a date must take priority over ABSENT.
+     *
+     * Root cause: the nightly AttendanceAbsentJob (and other paths that default
+     * a missing day to ABSENT) never checked the Leave module at all, so a day
+     * covered by an approved leave with no attendance row fell straight to
+     * ABSENT. This overlays the correct status at read time, using the Leave
+     * Requests table (the real source of truth for approved leave) — it does
+     * NOT touch stored attendance data, so every other flow (regularization,
+     * payroll, reports, the absent job itself) is unaffected.
+     *
+     * Only a plain ABSENT row with no actual check-in is overridden: an
+     * employee who genuinely checked in/out keeps their real PRESENT/HALF_DAY
+     * status (existing precedence preserved, per the "don't guess" rule for
+     * approved-leave + attendance-record overlap).
+     */
+    private void applyApprovedLeaveOverride(List<Attendance> rows, List<LeaveRequest> leaves) {
+        if (rows.isEmpty() || leaves.isEmpty()) return;
+        for (Attendance a : rows) {
+            if (!"ABSENT".equalsIgnoreCase(a.getStatus())) continue;
+            if (a.getCheckInTime() != null) continue;
+            boolean onApprovedLeave = leaves.stream().anyMatch(l ->
+                    "APPROVED".equalsIgnoreCase(l.getStatus())
+                    && l.getEmployeeId().equals(a.getEmployeeId())
+                    && !a.getAttendanceDate().isBefore(l.getFromDate())
+                    && !a.getAttendanceDate().isAfter(l.getToDate()));
+            if (onApprovedLeave) {
+                a.setStatus("LEAVE");
+            }
+        }
+    }
+
     public List<Attendance> history(UUID employeeId) {
-        return attendanceRepository.findByEmployeeIdOrderByAttendanceDateDesc(employeeId);
+        List<Attendance> rows = attendanceRepository.findByEmployeeIdOrderByAttendanceDateDesc(employeeId);
+        applyApprovedLeaveOverride(rows, leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId));
+        return rows;
     }
     public List<Attendance> forDate(LocalDate date) {
-        return attendanceRepository.findByAttendanceDate(date);
+        List<Attendance> rows = attendanceRepository.findByAttendanceDate(date);
+        applyApprovedLeaveOverride(rows, leaveRequestRepository.findByStatusOrderByCreatedAtDesc("APPROVED"));
+        return rows;
     }
     @Transactional
     public int bulkMark(BulkAttendanceRequest req) {
