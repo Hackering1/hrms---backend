@@ -124,7 +124,7 @@ public class SalaryStructureService {
                     r.getCalculationType(),
                     r.getPercentage(),
                     r.getFlatAmount(),
-                    c != null ? c.getIsStatutory() : false,
+                    Boolean.TRUE.equals(c != null ? c.getIsStatutory() : null),
                     r.getDisplayOrder(),
                     belowBasicFloor
             );
