@@ -18,6 +18,14 @@ import java.util.stream.Collectors;
  *
  * Order of resolution (matters — later steps depend on earlier ones):
  *   1. PERCENT_OF_CTC   (e.g. Basic = 50% of annual CTC)
+ *      PERCENT_OF_GROSS (e.g. a component = 10% of Gross Salary) — resolved in
+ *      the SAME pass as PERCENT_OF_CTC. In this structure model the non-statutory
+ *      earning components always add up to the full monthly CTC (the REMAINDER
+ *      component absorbs whatever's left — see step 4), so "Gross Salary" and
+ *      "CTC" are the same monthly figure here; employer-side contributions
+ *      (PF employer share, etc.) are computed separately per payroll run and are
+ *      never part of this split. PERCENT_OF_GROSS therefore uses the same base
+ *      (monthlyCtc) as PERCENT_OF_CTC.
  *   2. PERCENT_OF_BASIC (e.g. HRA = 40% of Basic)
  *   3. FLAT              (fixed monthly amount, e.g. Conveyance)
  *   4. REMAINDER         (whatever's left of CTC after the above — at most one
@@ -50,9 +58,10 @@ public class SalaryBreakupCalculator {
         Map<Integer, BigDecimal> monthlyById = new java.util.HashMap<>();
         BigDecimal remainderTotal = monthlyCtc; // what's left of the monthly CTC as we allocate
 
-        // 1) PERCENT_OF_CTC (e.g. Basic)
+        // 1) PERCENT_OF_CTC (e.g. Basic) and PERCENT_OF_GROSS — both resolved off
+        // the same monthlyCtc base (see class-level note on why Gross == CTC here).
         for (SalaryStructureComponent c : components) {
-            if (!"PERCENT_OF_CTC".equals(c.getCalculationType())) continue;
+            if (!"PERCENT_OF_CTC".equals(c.getCalculationType()) && !"PERCENT_OF_GROSS".equals(c.getCalculationType())) continue;
             requirePercentage(c);
             BigDecimal amt = monthlyCtc.multiply(c.getPercentage()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             monthlyById.put(c.getSalaryComponentId(), amt);

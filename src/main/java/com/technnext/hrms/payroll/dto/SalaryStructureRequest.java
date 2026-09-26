@@ -13,7 +13,7 @@ public record SalaryStructureRequest(
 ) {
     public record ComponentLine(
             Integer salaryComponentId,
-            String calculationType,   // FLAT | PERCENT_OF_CTC | PERCENT_OF_BASIC | REMAINDER
+            String calculationType,   // FLAT | PERCENT_OF_CTC | PERCENT_OF_BASIC | PERCENT_OF_GROSS | REMAINDER
             BigDecimal percentage,    // required for PERCENT_* types
             BigDecimal flatAmount,    // required for FLAT type
             Integer displayOrder

@@ -19,6 +19,11 @@ public record SalaryStructureResponse(
             BigDecimal percentage,
             BigDecimal flatAmount,
             Boolean isStatutory,
-            Integer displayOrder
+            Integer displayOrder,
+            // Only set (non-null) for the component with code "BASIC": true when its
+            // percentage is below the 50% wage-code floor (Basic, or Basic+DA where a
+            // separate DA component exists, must be >= 50% of the total remuneration).
+            // Informational only — does not block save; the UI renders it as a badge.
+            Boolean belowBasicFloor
     ) {}
 }

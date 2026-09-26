@@ -82,7 +82,7 @@ public class SalaryStructureService {
                     .orElseThrow(() -> new BadRequestException("Unknown salary component id: " + line.salaryComponentId()));
 
             String calcType = line.calculationType() == null ? "FLAT" : line.calculationType();
-            if (("PERCENT_OF_CTC".equals(calcType) || "PERCENT_OF_BASIC".equals(calcType)) && line.percentage() == null) {
+            if (("PERCENT_OF_CTC".equals(calcType) || "PERCENT_OF_BASIC".equals(calcType) || "PERCENT_OF_GROSS".equals(calcType)) && line.percentage() == null) {
                 throw new BadRequestException("Component id " + line.salaryComponentId() + " needs a percentage for calculation type " + calcType + ".");
             }
 
@@ -106,6 +106,16 @@ public class SalaryStructureService {
 
         List<SalaryStructureResponse.ComponentLine> lines = rows.stream().map(r -> {
             SalaryComponent c = componentsById.get(r.getSalaryComponentId());
+            boolean isBasic = c != null && "BASIC".equals(c.getCode());
+            // Wage-code floor: Basic must be at least 50% of the CTC/Gross split it's
+            // defined against (PERCENT_OF_CTC or PERCENT_OF_GROSS). Flag only applies
+            // to the Basic component and only when it's percentage-based.
+            Boolean belowBasicFloor = null;
+            if (isBasic
+                    && ("PERCENT_OF_CTC".equals(r.getCalculationType()) || "PERCENT_OF_GROSS".equals(r.getCalculationType()))
+                    && r.getPercentage() != null) {
+                belowBasicFloor = r.getPercentage().compareTo(new java.math.BigDecimal("50")) < 0;
+            }
             return new SalaryStructureResponse.ComponentLine(
                     r.getSalaryComponentId(),
                     c != null ? c.getName() : "(unknown)",
@@ -115,7 +125,8 @@ public class SalaryStructureService {
                     r.getPercentage(),
                     r.getFlatAmount(),
                     c != null ? c.getIsStatutory() : false,
-                    r.getDisplayOrder()
+                    r.getDisplayOrder(),
+                    belowBasicFloor
             );
         }).collect(Collectors.toList());
 

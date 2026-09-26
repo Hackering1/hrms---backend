@@ -22,7 +22,7 @@ public class SalaryComponent {
     @Column(name = "component_type", nullable = false)
     private String componentType;
 
-    // FLAT | PERCENT_OF_CTC | PERCENT_OF_BASIC | REMAINDER
+    // FLAT | PERCENT_OF_CTC | PERCENT_OF_BASIC | PERCENT_OF_GROSS | REMAINDER
     @Builder.Default
     @Column(name = "calculation_type", nullable = false)
     private String calculationType = "FLAT";
