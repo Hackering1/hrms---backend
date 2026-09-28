@@ -87,7 +87,7 @@ public class PayrollCalculationService {
             lines.add(new LineItem(c.getName(), "EARNING", prorated));
             grossEarnings = grossEarnings.add(prorated);
             if (Boolean.TRUE.equals(c.getIsTaxable())) taxableGross = taxableGross.add(prorated);
-            if ("BASIC".equals(c.getCode())) proratedBasic = prorated;
+            if ("Basic Salary".equals(c.getName())) proratedBasic = prorated;
         }
 
         // One-off adjustments for this employee/month not yet consumed by another run.

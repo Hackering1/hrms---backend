@@ -106,7 +106,7 @@ public class SalaryStructureService {
 
         List<SalaryStructureResponse.ComponentLine> lines = rows.stream().map(r -> {
             SalaryComponent c = componentsById.get(r.getSalaryComponentId());
-            boolean isBasic = c != null && "BASIC".equals(c.getCode());
+            boolean isBasic = c != null && "Basic Salary".equals(c.getName());
             // Wage-code floor: Basic must be at least 50% of the CTC/Gross split it's
             // defined against (PERCENT_OF_CTC or PERCENT_OF_GROSS). Flag only applies
             // to the Basic component and only when it's percentage-based.

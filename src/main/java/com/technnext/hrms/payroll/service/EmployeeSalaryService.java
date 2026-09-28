@@ -106,9 +106,9 @@ public class EmployeeSalaryService {
                 .toList();
 
         SalaryComponent basic = salaryComponentRepository.findAll().stream()
-                .filter(c -> "BASIC".equals(c.getCode()))
+                .filter(c -> "Basic Salary".equals(c.getName()))
                 .findFirst()
-                .orElseThrow(() -> new BadRequestException("No salary component with code BASIC exists — required as the base for PERCENT_OF_BASIC components (e.g. HRA)."));
+                .orElseThrow(() -> new BadRequestException("No salary component named \"Basic Salary\" exists — required as the base for PERCENT_OF_BASIC components (e.g. HRA)."));
 
         List<SalaryBreakupCalculator.ComponentAmount> amounts =
                 breakupCalculator.computeBreakup(salary.getAnnualCtc(), earningComponents, basic.getId());
