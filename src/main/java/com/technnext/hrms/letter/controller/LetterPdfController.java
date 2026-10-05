@@ -55,6 +55,7 @@ public class LetterPdfController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
     public ResponseEntity<byte[]> generate(@RequestBody LetterPdfRequest request) {
         LetterPdfRequest enriched = enrich(request);
+        validateInternshipOffer(enriched);
         byte[] pdf = pdfService.generate(enriched);
         String filename = typeLabel(enriched.letterType()) + "_Letter_" +
                 (enriched.employeeName() == null ? "Employee"
@@ -92,6 +93,7 @@ public class LetterPdfController {
         }
 
         LetterPdfRequest enriched = enrich(request.letter());
+        validateInternshipOffer(enriched);
 
         byte[] pdf;
         try {
@@ -140,6 +142,28 @@ public class LetterPdfController {
     // Deliberately NOT a refactor of LetterPdfService's own (separately)
     // hardcoded copies of this same string in the PDF body — this constant
     // only feeds the email subject/body built in this controller.
+    private void validateInternshipOffer(LetterPdfRequest request) {
+        if (request == null || request.letterType() == null
+                || !"INTERNSHIP_OFFER".equalsIgnoreCase(request.letterType())) {
+            return;
+        }
+        String compensation = request.internshipCompensationType() == null
+                ? "" : request.internshipCompensationType().trim().toUpperCase();
+        if (!"PAID".equals(compensation) && !"UNPAID".equals(compensation)) {
+            throw new BadRequestException("Please select Paid Internship or Unpaid Internship.");
+        }
+        if ("PAID".equals(compensation)) {
+            String stipend = request.internshipStipend() == null ? "" : request.internshipStipend().trim().replace(",", "");
+            try {
+                if (stipend.isBlank() || Double.parseDouble(stipend) <= 0) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException ex) {
+                throw new BadRequestException("Please enter a valid monthly stipend greater than zero for a paid internship.");
+            }
+        }
+    }
+
     private static final String COMPANY_NAME = "TechNext Technologies and Services Private Limited";
 
     private record EmailCopy(String subject, String body) {}
@@ -223,6 +247,7 @@ public class LetterPdfController {
             case "RELIEVING":   return "Relieving";
             case "EXPERIENCE":  return "Experience";
             case "INTERNSHIP":  return "Internship";
+            case "INTERNSHIP_OFFER": return "Internship_Offer";
             case "C2H":         return "Contract_to_Hire_Offer";
             default:            return "Offer";
         }
@@ -296,6 +321,9 @@ public class LetterPdfController {
                 r.employeeId(), r.employeeName(), gender, address, r.letterType(),
                 r.letterDate(), r.place(), r.dateOfJoining(), r.employmentEndDate(),
                 r.internshipDetails(),
+                r.internshipCompensationType(), r.internshipStipend(),
+                r.internshipDepartment(), r.internshipReportingManager(),
+                r.internshipWorkingDays(), r.internshipStartTime(), r.internshipEndTime(),
                 r.designation(), r.workLocation(),
                 r.employmentType(), r.contractDuration(), r.contractDurationUnit(),
                 r.ctcAnnual(), r.ctcInWords(),

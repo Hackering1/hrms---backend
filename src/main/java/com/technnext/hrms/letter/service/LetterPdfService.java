@@ -116,6 +116,14 @@ public class LetterPdfService {
                 doc.close();
                 return out.toByteArray();
             }
+            // Internship Offer Letter — separate from the existing INTERNSHIP
+            // experience-letter path above. It uses the supplied offer-letter
+            // clause structure and conditionally renders Paid/Unpaid content.
+            if (type.equals("INTERNSHIP_OFFER")) {
+                addInternshipOfferLetter(doc, r, writer);
+                doc.close();
+                return out.toByteArray();
+            }
             // Contract-to-Hire Offer Letter — new letter type. Distinct clause
             // set (contract term, nature of employment, termination-with-notice,
             // etc.) per the company's C2H reference document, but reuses the
@@ -260,6 +268,127 @@ public class LetterPdfService {
      * responsibilities/technologies/contributions — never hardcoded. If left
      * blank, that paragraph is simply skipped rather than rendering empty.
      */
+    private void addInternshipOfferLetter(Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
+        addLetterhead(doc);
+        addDateBlock(doc, r);
+        addTitle(doc, "INTERNSHIP OFFER LETTER");
+
+        doc.add(new Paragraph("To,", BODY));
+        doc.add(new Paragraph(safe(r.employeeName()), BODY_B));
+        addAddressLines(doc, r);
+        if (r.employeeAddress() != null && !r.employeeAddress().isBlank()) {
+            doc.add(new Paragraph(" ", BODY));
+        }
+        Paragraph subject = new Paragraph("Subject: Offer of Internship – " + safe(r.designation()), BODY_B);
+        subject.setSpacingBefore(2f);
+        doc.add(subject);
+        doc.add(new Paragraph("Dear " + firstName(r.employeeName()) + ",", BODY));
+        Paragraph intro = new Paragraph();
+        intro.setAlignment(Element.ALIGN_JUSTIFIED);
+        intro.add(new Chunk("We are pleased to offer you an internship opportunity with ", BODY));
+        intro.add(new Chunk("TechNext Technologies and Services Private Limited", BODY_B));
+        intro.add(new Chunk(" for the position of ", BODY));
+        intro.add(new Chunk(safe(r.designation()), BODY_B));
+        intro.add(new Chunk(". Based on your profile, skills, and interaction with our team, we believe that this internship will provide you with valuable practical exposure and an opportunity to develop your professional and technical skills.", BODY));
+        intro.setSpacingBefore(6f);
+        doc.add(intro);
+        doc.add(new Paragraph("Your internship will be governed by the following terms and conditions:", BODY));
+
+        clause(doc, 1, "Internship Position",
+                "Designation: " + safe(r.designation()) + "\n" +
+                "Department: " + safe(r.internshipDepartment()) + "\n" +
+                "Reporting Manager: " + safe(r.internshipReportingManager()) + "\n" +
+                "Location: " + safe(r.workLocation()));
+
+        clause(doc, 2, "Internship Duration",
+                "Your internship will commence on " + safe(r.dateOfJoining()) + " and will continue until " +
+                safe(r.employmentEndDate()) + ".");
+
+        String workingDays = safe(r.internshipWorkingDays());
+        String startTime = safe(r.internshipStartTime());
+        String endTime = safe(r.internshipEndTime());
+        clause(doc, 3, "Working Hours",
+                (workingDays.isBlank() ? "" : workingDays + " | ") +
+                (startTime.isBlank() && endTime.isBlank() ? "" : startTime + " to " + endTime) +
+                "\nYou are expected to maintain professional discipline, punctuality, and regular attendance throughout the internship.");
+
+        // Keep the compensation selection mutually exclusive: the PDF contains
+        // only the option chosen by HR, never both paid and unpaid content.
+        Paragraph compTitle = new Paragraph("4. Stipend / Compensation", CLAUSE_T);
+        compTitle.setSpacingBefore(8f);
+        compTitle.setSpacingAfter(2f);
+        doc.add(compTitle);
+        String compensation = safe(r.internshipCompensationType()).trim().toUpperCase();
+        if ("PAID".equals(compensation)) {
+            Paragraph paid = new Paragraph("Option B – Paid Internship", BODY_B);
+            doc.add(paid);
+            Paragraph paidBody = new Paragraph("You will be entitled to a monthly stipend of ₹" +
+                    safe(r.internshipStipend()) + ", subject to applicable Company policies and satisfactory attendance and performance.", BODY);
+            paidBody.setAlignment(Element.ALIGN_JUSTIFIED);
+            doc.add(paidBody);
+        } else {
+            Paragraph unpaid = new Paragraph("Option A – Unpaid Internship", BODY_B);
+            doc.add(unpaid);
+            Paragraph unpaidBody = new Paragraph("This internship is an unpaid internship, and no stipend or salary will be payable during the internship period.", BODY);
+            unpaidBody.setAlignment(Element.ALIGN_JUSTIFIED);
+            doc.add(unpaidBody);
+        }
+
+        clause(doc, 5, "Roles and Responsibilities",
+                "During the internship, you will be expected to:\n" +
+                "• Perform tasks and assignments allocated by your reporting manager.\n" +
+                "• Participate actively in team meetings, training sessions, and project activities.\n" +
+                "• Follow the Company's processes, policies, and instructions.\n" +
+                "• Maintain professional communication and conduct.\n" +
+                "• Complete assigned tasks within the agreed timelines.\n" +
+                "• Maintain confidentiality of Company, client, employee, candidate, and project information.\n" +
+                "• Continuously develop the skills relevant to your internship role.");
+
+        clause(doc, 6, "Training and Learning",
+                "During the internship, you may receive practical training, mentoring, project exposure, and guidance from members of the Company. The internship is intended to provide practical industry exposure and professional development. The Company may evaluate your performance periodically.");
+
+        clause(doc, 7, "Performance Evaluation",
+                "Your performance may be evaluated based on factors including:\n" +
+                "• Attendance and punctuality\n• Quality of work\n• Technical/professional skills\n• Learning ability\n• Communication\n• Teamwork\n• Initiative and ownership\n• Meeting assigned targets and deadlines\n• Professional conduct\n\nBased on your overall performance, the Company may provide an Internship Completion Certificate upon successful completion of the internship.");
+
+        clause(doc, 8, "Employment Opportunity",
+                "Successful completion of the internship does not guarantee permanent employment with the Company. However, based on business requirements, performance, skills, and availability of suitable positions, the Company may consider you for a full-time employment opportunity. Any employment opportunity will be subject to a separate employment offer letter and applicable terms and conditions.");
+
+        clause(doc, 9, "Confidentiality",
+                "During your internship, you may have access to confidential information relating to the Company, its clients, employees, candidates, projects, technology, business processes, pricing, databases, software, and other proprietary information. You shall not disclose, copy, distribute, misuse, or share such information with any unauthorized person during or after the internship. You must immediately return or delete Company information, documents, credentials, and other materials upon completion or termination of your internship.");
+
+        clause(doc, 10, "Intellectual Property",
+                "Any work product, documents, designs, software, code, reports, databases, processes, content, or other materials created or developed by you during the internship in connection with Company work shall belong to TechNext Technologies and Services Private Limited, subject to applicable law and the specific terms of any separate agreement. You shall not use or distribute such materials for personal or commercial purposes without prior written authorization from the Company.");
+
+        clause(doc, 11, "Company Policies",
+                "You are required to comply with all applicable Company policies, procedures, information-security requirements, acceptable-use guidelines, and instructions communicated to you from time to time. Any violation of Company policies may result in disciplinary action, including termination of the internship.");
+
+        clause(doc, 12, "Termination of Internship",
+                "Either the Company or the Intern may terminate the internship by providing [7/15] days' notice, unless otherwise specified by the Company. The Company reserves the right to terminate the internship immediately in cases involving serious misconduct, breach of confidentiality, violation of Company policies, unauthorized absence, fraud, misuse of Company resources, or other serious violations.");
+
+        clause(doc, 13, "Attendance and Leave",
+                "You are expected to maintain regular attendance throughout the internship. Leave or absence must be approved in advance by your reporting manager, except in genuine emergencies. Repeated unauthorized absence or poor attendance may affect your internship evaluation and continuation.");
+
+        clause(doc, 14, "Company Assets and Access",
+                "Any laptop, ID card, software credentials, email account, documents, equipment, or other Company assets provided to you must be used only for authorized purposes. All Company assets and access credentials must be returned or surrendered upon completion or termination of the internship.");
+
+        clause(doc, 15, "Declaration",
+                "By accepting this offer, you confirm that:\n" +
+                "• The information provided by you during the selection process is accurate.\n" +
+                "• You will comply with Company policies and instructions.\n" +
+                "• You will maintain confidentiality of Company and client information.\n" +
+                "• You will perform your responsibilities professionally and diligently.\n" +
+                "• You understand that the internship does not guarantee permanent employment.");
+
+        Paragraph welcome = new Paragraph("We are pleased to welcome you to TechNext Technologies and Services Private Limited and look forward to your learning, contribution, and professional growth with us. We wish you a successful and rewarding internship experience.", BODY);
+        welcome.setAlignment(Element.ALIGN_JUSTIFIED);
+        welcome.setSpacingBefore(6f);
+        doc.add(welcome);
+
+        addSignatory(doc, r);
+        addEmployeeAcceptance(doc, r, writer);
+    }
+
     private void addInternshipBody(Document doc, LetterPdfRequest r) throws DocumentException {
         // Gender-aware pronouns (fall back to "their/them" if unknown) — same
         // convention as addRelievingBody, for consistency.

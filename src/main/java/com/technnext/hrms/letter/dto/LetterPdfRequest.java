@@ -25,6 +25,14 @@ public record LetterPdfRequest(
         // responsibilities/technologies/contributions. Never hardcoded —
         // blank/omitted simply skips that paragraph in the letter.
         String internshipDetails,
+        // Internship Offer Letter only. Compensation is PAID or UNPAID; stipend is required only for PAID.
+        String internshipCompensationType,
+        String internshipStipend,
+        String internshipDepartment,
+        String internshipReportingManager,
+        String internshipWorkingDays,
+        String internshipStartTime,
+        String internshipEndTime,
         String designation,       // e.g. "Software Developer"
         String workLocation,      // e.g. "Bangalore"
         // NEW — employment type drives the wording in clause 1 of the Offer/
