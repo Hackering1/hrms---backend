@@ -9,7 +9,9 @@ import com.technnext.hrms.employee.repository.EmployeeRepository;
 import com.technnext.hrms.employee.service.EmployeeContactService;
 import com.technnext.hrms.letter.dto.LetterEmailRequest;
 import com.technnext.hrms.letter.dto.LetterPdfRequest;
+import com.technnext.hrms.letter.dto.ReportingManagerOption;
 import com.technnext.hrms.letter.service.LetterPdfService;
+import com.technnext.hrms.manager.service.ManagerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -47,6 +50,10 @@ public class LetterPdfController {
     // NEW — reused as-is (existing Microsoft Graph mailer, same infra used
     // for welcome/invite emails). No second email system is created.
     private final EmailService emailService;
+    // NEW — existing manager source (the same ManagerService the Team
+    // Assignment screen's manager dropdown is built on). Reused as-is; no
+    // second manager list or manager-maintenance logic is created.
+    private final ManagerService managerService;
 
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}$");
@@ -66,6 +73,32 @@ public class LetterPdfController {
         headers.setContentDispositionFormData("attachment", filename);
         headers.setContentLength(pdf.length);
         return ResponseEntity.ok().headers(headers).body(pdf);
+    }
+
+    /**
+     * NEW — options for the Internship Offer Letter's "Reporting Manager"
+     * dropdown. Delegates to the existing ManagerService.getAssignableManagers()
+     * (every employee whose login holds a manager-eligible role), so any
+     * manager added to the portal later shows up here automatically — nothing
+     * is hardcoded. Same role restriction as letter generation itself; the
+     * existing SUPER_ADMIN-only /api/manager/assignable endpoint is left
+     * untouched. Employees who have been deleted/exited are skipped; the
+     * response is a slim projection (no Aadhaar/PAN/bank data).
+     */
+    @GetMapping("/reporting-managers")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    public ApiResponse<List<ReportingManagerOption>> reportingManagers() {
+        List<ReportingManagerOption> options = managerService.getAssignableManagers().stream()
+                .filter(e -> !"DELETED".equalsIgnoreCase(e.status()) && !"EXITED".equalsIgnoreCase(e.status()))
+                .map(e -> new ReportingManagerOption(
+                        e.id(),
+                        ((e.firstName() == null ? "" : e.firstName()) + " "
+                                + (e.lastName() == null ? "" : e.lastName())).trim(),
+                        e.employeeCode(),
+                        e.designationName()))
+                .sorted(Comparator.comparing(ReportingManagerOption::name, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+        return ApiResponse.ok(options);
     }
 
     /**

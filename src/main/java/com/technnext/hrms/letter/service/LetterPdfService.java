@@ -91,13 +91,49 @@ public class LetterPdfService {
     private static final Font CELL_B = new Font(TIMES_BOLD, 9, Font.NORMAL, Color.BLACK);
     private static final Font CELL_W = new Font(TIMES_BOLD, 9, Font.NORMAL, Color.WHITE);
     private static final Font FOOT = new Font(TIMES_REGULAR, 12, Font.NORMAL, GREY);
+
+    /**
+     * The fonts the shared helpers (letterhead contact lines, date block, title,
+     * clauses, signatory, acceptance, footer) draw with. {@link #STANDARD_FONTS}
+     * is exactly the constants above, so every existing letter renders as before.
+     * Only the Internship Offer Letter passes a different set (see
+     * {@link #internshipOfferFonts()}) — same sizes, same colours, different
+     * typeface only.
+     */
+    private record LetterFonts(Font body, Font bodyB, Font clauseT, Font title, Font contact, Font foot) {}
+
+    private static final LetterFonts STANDARD_FONTS =
+            new LetterFonts(BODY, BODY_B, CLAUSE_T, TITLE, CONTACT, FOOT);
+
+    /**
+     * Internship Offer Letter fonts: genuine Times New Roman when its files can be
+     * found (see {@link TimesNewRomanFonts}); otherwise the standard Tinos set,
+     * with a WARNING logged on every generation. Sizes mirror the constants above
+     * exactly (body 12, clause heading 13, title 16, contact 12, footer 12).
+     */
+    private static LetterFonts internshipOfferFonts() {
+        TimesNewRomanFonts.Resolved tnr = TimesNewRomanFonts.resolve(TIMES_REGULAR, TIMES_BOLD);
+        return new LetterFonts(
+                new Font(tnr.regular(), 12, Font.NORMAL, Color.BLACK),
+                new Font(tnr.bold(), 12, Font.NORMAL, Color.BLACK),
+                new Font(tnr.bold(), 13, Font.NORMAL, Color.BLACK),
+                new Font(tnr.bold(), 16, Font.NORMAL, Color.BLACK),
+                new Font(tnr.regular(), 12, Font.NORMAL, Color.BLACK),
+                new Font(tnr.regular(), 12, Font.NORMAL, GREY));
+    }
     public byte[] generate(LetterPdfRequest r) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             Document doc = new Document(PageSize.A4, 50, 50, 45, 88);
             PdfWriter writer = PdfWriter.getInstance(doc, out);
             // Watermark behind every page + address/CIN footer on every page.
-            writer.setPageEvent(new PageDecorator());
+            // Internship Offer Letter only: footer text uses the same Times New
+            // Roman font set as the rest of that letter (sizes/positions identical).
+            boolean internshipOffer = "INTERNSHIP_OFFER".equalsIgnoreCase(r.letterType());
+            LetterFonts internshipFonts = internshipOffer ? internshipOfferFonts() : null;
+            writer.setPageEvent(internshipOffer
+                    ? new PageDecorator(internshipFonts.foot())
+                    : new PageDecorator());
             doc.open();
             String type = r.letterType() == null ? "OFFER" : r.letterType().toUpperCase();
             // Relieving / Experience letter is a distinct, single-page layout.
@@ -120,7 +156,7 @@ public class LetterPdfService {
             // experience-letter path above. It uses the supplied offer-letter
             // clause structure and conditionally renders Paid/Unpaid content.
             if (type.equals("INTERNSHIP_OFFER")) {
-                addInternshipOfferLetter(doc, r, writer);
+                addInternshipOfferLetter(doc, r, writer, internshipFonts);
                 doc.close();
                 return out.toByteArray();
             }
@@ -268,73 +304,73 @@ public class LetterPdfService {
      * responsibilities/technologies/contributions — never hardcoded. If left
      * blank, that paragraph is simply skipped rather than rendering empty.
      */
-    private void addInternshipOfferLetter(Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
-        addLetterhead(doc);
-        addDateBlock(doc, r);
-        addTitle(doc, "INTERNSHIP OFFER LETTER");
+    private void addInternshipOfferLetter(Document doc, LetterPdfRequest r, PdfWriter writer, LetterFonts f) throws DocumentException {
+        addLetterhead(f, doc);
+        addDateBlock(f, doc, r);
+        addTitle(f, doc, "INTERNSHIP OFFER LETTER");
 
-        doc.add(new Paragraph("To,", BODY));
-        doc.add(new Paragraph(safe(r.employeeName()), BODY_B));
-        addAddressLines(doc, r);
+        doc.add(new Paragraph("To,", f.body()));
+        doc.add(new Paragraph(safe(r.employeeName()), f.bodyB()));
+        addAddressLines(f, doc, r);
         if (r.employeeAddress() != null && !r.employeeAddress().isBlank()) {
-            doc.add(new Paragraph(" ", BODY));
+            doc.add(new Paragraph(" ", f.body()));
         }
-        Paragraph subject = new Paragraph("Subject: Offer of Internship – " + safe(r.designation()), BODY_B);
+        Paragraph subject = new Paragraph("Subject: Offer of Internship – " + safe(r.designation()), f.bodyB());
         subject.setSpacingBefore(2f);
         doc.add(subject);
-        doc.add(new Paragraph("Dear " + firstName(r.employeeName()) + ",", BODY));
+        doc.add(new Paragraph("Dear " + firstName(r.employeeName()) + ",", f.body()));
         Paragraph intro = new Paragraph();
         intro.setAlignment(Element.ALIGN_JUSTIFIED);
-        intro.add(new Chunk("We are pleased to offer you an internship opportunity with ", BODY));
-        intro.add(new Chunk("TechNext Technologies and Services Private Limited", BODY_B));
-        intro.add(new Chunk(" for the position of ", BODY));
-        intro.add(new Chunk(safe(r.designation()), BODY_B));
-        intro.add(new Chunk(". Based on your profile, skills, and interaction with our team, we believe that this internship will provide you with valuable practical exposure and an opportunity to develop your professional and technical skills.", BODY));
+        intro.add(new Chunk("We are pleased to offer you an internship opportunity with ", f.body()));
+        intro.add(new Chunk("TechNext Technologies and Services Private Limited", f.bodyB()));
+        intro.add(new Chunk(" for the position of ", f.body()));
+        intro.add(new Chunk(safe(r.designation()), f.bodyB()));
+        intro.add(new Chunk(". Based on your profile, skills, and interaction with our team, we believe that this internship will provide you with valuable practical exposure and an opportunity to develop your professional and technical skills.", f.body()));
         intro.setSpacingBefore(6f);
         doc.add(intro);
-        doc.add(new Paragraph("Your internship will be governed by the following terms and conditions:", BODY));
+        doc.add(new Paragraph("Your internship will be governed by the following terms and conditions:", f.body()));
 
-        clause(doc, 1, "Internship Position",
+        clause(f, doc, 1, "Internship Position",
                 "Designation: " + safe(r.designation()) + "\n" +
                 "Department: " + safe(r.internshipDepartment()) + "\n" +
                 "Reporting Manager: " + safe(r.internshipReportingManager()) + "\n" +
                 "Location: " + safe(r.workLocation()));
 
-        clause(doc, 2, "Internship Duration",
+        clause(f, doc, 2, "Internship Duration",
                 "Your internship will commence on " + safe(r.dateOfJoining()) + " and will continue until " +
                 safe(r.employmentEndDate()) + ".");
 
         String workingDays = safe(r.internshipWorkingDays());
         String startTime = safe(r.internshipStartTime());
         String endTime = safe(r.internshipEndTime());
-        clause(doc, 3, "Working Hours",
+        clause(f, doc, 3, "Working Hours",
                 (workingDays.isBlank() ? "" : workingDays + " | ") +
                 (startTime.isBlank() && endTime.isBlank() ? "" : startTime + " to " + endTime) +
                 "\nYou are expected to maintain professional discipline, punctuality, and regular attendance throughout the internship.");
 
         // Keep the compensation selection mutually exclusive: the PDF contains
         // only the option chosen by HR, never both paid and unpaid content.
-        Paragraph compTitle = new Paragraph("4. Stipend / Compensation", CLAUSE_T);
+        Paragraph compTitle = new Paragraph("4. Stipend / Compensation", f.clauseT());
         compTitle.setSpacingBefore(8f);
         compTitle.setSpacingAfter(2f);
         doc.add(compTitle);
         String compensation = safe(r.internshipCompensationType()).trim().toUpperCase();
         if ("PAID".equals(compensation)) {
-            Paragraph paid = new Paragraph("Option B – Paid Internship", BODY_B);
+            Paragraph paid = new Paragraph("Paid Internship", f.bodyB());
             doc.add(paid);
             Paragraph paidBody = new Paragraph("You will be entitled to a monthly stipend of ₹" +
-                    safe(r.internshipStipend()) + ", subject to applicable Company policies and satisfactory attendance and performance.", BODY);
+                    safe(r.internshipStipend()) + ", subject to applicable Company policies and satisfactory attendance and performance.", f.body());
             paidBody.setAlignment(Element.ALIGN_JUSTIFIED);
             doc.add(paidBody);
         } else {
-            Paragraph unpaid = new Paragraph("Option A – Unpaid Internship", BODY_B);
+            Paragraph unpaid = new Paragraph("Unpaid Internship", f.bodyB());
             doc.add(unpaid);
-            Paragraph unpaidBody = new Paragraph("This internship is an unpaid internship, and no stipend or salary will be payable during the internship period.", BODY);
+            Paragraph unpaidBody = new Paragraph("This internship is an unpaid internship, and no stipend or salary will be payable during the internship period.", f.body());
             unpaidBody.setAlignment(Element.ALIGN_JUSTIFIED);
             doc.add(unpaidBody);
         }
 
-        clause(doc, 5, "Roles and Responsibilities",
+        clause(f, doc, 5, "Roles and Responsibilities",
                 "During the internship, you will be expected to:\n" +
                 "• Perform tasks and assignments allocated by your reporting manager.\n" +
                 "• Participate actively in team meetings, training sessions, and project activities.\n" +
@@ -344,35 +380,35 @@ public class LetterPdfService {
                 "• Maintain confidentiality of Company, client, employee, candidate, and project information.\n" +
                 "• Continuously develop the skills relevant to your internship role.");
 
-        clause(doc, 6, "Training and Learning",
+        clause(f, doc, 6, "Training and Learning",
                 "During the internship, you may receive practical training, mentoring, project exposure, and guidance from members of the Company. The internship is intended to provide practical industry exposure and professional development. The Company may evaluate your performance periodically.");
 
-        clause(doc, 7, "Performance Evaluation",
+        clause(f, doc, 7, "Performance Evaluation",
                 "Your performance may be evaluated based on factors including:\n" +
                 "• Attendance and punctuality\n• Quality of work\n• Technical/professional skills\n• Learning ability\n• Communication\n• Teamwork\n• Initiative and ownership\n• Meeting assigned targets and deadlines\n• Professional conduct\n\nBased on your overall performance, the Company may provide an Internship Completion Certificate upon successful completion of the internship.");
 
-        clause(doc, 8, "Employment Opportunity",
+        clause(f, doc, 8, "Employment Opportunity",
                 "Successful completion of the internship does not guarantee permanent employment with the Company. However, based on business requirements, performance, skills, and availability of suitable positions, the Company may consider you for a full-time employment opportunity. Any employment opportunity will be subject to a separate employment offer letter and applicable terms and conditions.");
 
-        clause(doc, 9, "Confidentiality",
+        clause(f, doc, 9, "Confidentiality",
                 "During your internship, you may have access to confidential information relating to the Company, its clients, employees, candidates, projects, technology, business processes, pricing, databases, software, and other proprietary information. You shall not disclose, copy, distribute, misuse, or share such information with any unauthorized person during or after the internship. You must immediately return or delete Company information, documents, credentials, and other materials upon completion or termination of your internship.");
 
-        clause(doc, 10, "Intellectual Property",
+        clause(f, doc, 10, "Intellectual Property",
                 "Any work product, documents, designs, software, code, reports, databases, processes, content, or other materials created or developed by you during the internship in connection with Company work shall belong to TechNext Technologies and Services Private Limited, subject to applicable law and the specific terms of any separate agreement. You shall not use or distribute such materials for personal or commercial purposes without prior written authorization from the Company.");
 
-        clause(doc, 11, "Company Policies",
+        clause(f, doc, 11, "Company Policies",
                 "You are required to comply with all applicable Company policies, procedures, information-security requirements, acceptable-use guidelines, and instructions communicated to you from time to time. Any violation of Company policies may result in disciplinary action, including termination of the internship.");
 
-        clause(doc, 12, "Termination of Internship",
+        clause(f, doc, 12, "Termination of Internship",
                 "Either the Company or the Intern may terminate the internship by providing [7/15] days' notice, unless otherwise specified by the Company. The Company reserves the right to terminate the internship immediately in cases involving serious misconduct, breach of confidentiality, violation of Company policies, unauthorized absence, fraud, misuse of Company resources, or other serious violations.");
 
-        clause(doc, 13, "Attendance and Leave",
+        clause(f, doc, 13, "Attendance and Leave",
                 "You are expected to maintain regular attendance throughout the internship. Leave or absence must be approved in advance by your reporting manager, except in genuine emergencies. Repeated unauthorized absence or poor attendance may affect your internship evaluation and continuation.");
 
-        clause(doc, 14, "Company Assets and Access",
+        clause(f, doc, 14, "Company Assets and Access",
                 "Any laptop, ID card, software credentials, email account, documents, equipment, or other Company assets provided to you must be used only for authorized purposes. All Company assets and access credentials must be returned or surrendered upon completion or termination of the internship.");
 
-        clause(doc, 15, "Declaration",
+        clause(f, doc, 15, "Declaration",
                 "By accepting this offer, you confirm that:\n" +
                 "• The information provided by you during the selection process is accurate.\n" +
                 "• You will comply with Company policies and instructions.\n" +
@@ -380,13 +416,13 @@ public class LetterPdfService {
                 "• You will perform your responsibilities professionally and diligently.\n" +
                 "• You understand that the internship does not guarantee permanent employment.");
 
-        Paragraph welcome = new Paragraph("We are pleased to welcome you to TechNext Technologies and Services Private Limited and look forward to your learning, contribution, and professional growth with us. We wish you a successful and rewarding internship experience.", BODY);
+        Paragraph welcome = new Paragraph("We are pleased to welcome you to TechNext Technologies and Services Private Limited and look forward to your learning, contribution, and professional growth with us. We wish you a successful and rewarding internship experience.", f.body());
         welcome.setAlignment(Element.ALIGN_JUSTIFIED);
         welcome.setSpacingBefore(6f);
         doc.add(welcome);
 
-        addSignatory(doc, r);
-        addEmployeeAcceptance(doc, r, writer);
+        addSignatory(f, doc, r);
+        addEmployeeAcceptance(f, doc, r, writer);
     }
 
     private void addInternshipBody(Document doc, LetterPdfRequest r) throws DocumentException {
@@ -621,6 +657,11 @@ public class LetterPdfService {
     }
 
     private void addLetterhead(Document doc) throws DocumentException {
+        addLetterhead(STANDARD_FONTS, doc);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addLetterhead(LetterFonts f, Document doc) throws DocumentException {
         PdfPTable t = new PdfPTable(2);
         t.setWidthPercentage(100);
         t.setWidths(new int[]{1, 1});
@@ -643,7 +684,7 @@ public class LetterPdfService {
         right.setHorizontalAlignment(Element.ALIGN_RIGHT);
         right.setVerticalAlignment(Element.ALIGN_MIDDLE);   // centre contact beside logo
         for (String line : new String[]{"080 41515964", "Info@technnext.com", "www.technnext.com"}) {
-            Paragraph p = new Paragraph(line, CONTACT);
+            Paragraph p = new Paragraph(line, f.contact());
             p.setAlignment(Element.ALIGN_RIGHT);
             right.addElement(p);
         }
@@ -651,7 +692,7 @@ public class LetterPdfService {
         doc.add(t);
 
         // Header blue line REMOVED (per request) — just add spacing before the body.
-        Paragraph headSpace = new Paragraph(" ", BODY);
+        Paragraph headSpace = new Paragraph(" ", f.body());
         headSpace.setSpacingAfter(8f);
         doc.add(headSpace);
     }
@@ -729,6 +770,11 @@ public class LetterPdfService {
      * of the preceding line — Image.LEFT as a standalone block avoids that.
      */
     private void addSignatureImageOrGap(Document doc, String signatureFileId) throws DocumentException {
+        addSignatureImageOrGap(STANDARD_FONTS, doc, signatureFileId);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addSignatureImageOrGap(LetterFonts f, Document doc, String signatureFileId) throws DocumentException {
         Image sig = loadSignatureFromFile(signatureFileId);
         if (sig == null) sig = loadSignature();
         if (sig != null) {
@@ -738,7 +784,7 @@ public class LetterPdfService {
             sig.setSpacingAfter(5f);
             doc.add(sig);
         } else {
-            Paragraph sigSpace = new Paragraph(" ", BODY);
+            Paragraph sigSpace = new Paragraph(" ", f.body());
             sigSpace.setSpacingAfter(18f);
             doc.add(sigSpace);
         }
@@ -753,7 +799,15 @@ public class LetterPdfService {
         private boolean tried;
         private static final Color CYAN = new Color(0x00, 0xD4, 0xF0);
         private static final Color GREY = new Color(0x33, 0x33, 0x33);
-        private final Font foot = new Font(TIMES_REGULAR, 12, Font.NORMAL, GREY);
+        private final Font foot;
+
+        PageDecorator() {
+            this(new Font(TIMES_REGULAR, 12, Font.NORMAL, GREY));
+        }
+
+        PageDecorator(Font foot) {
+            this.foot = foot;
+        }
 
         @Override
         public void onEndPage(PdfWriter writer, Document document) {
@@ -817,23 +871,33 @@ public class LetterPdfService {
     }
 
     private void addDateBlock(Document doc, LetterPdfRequest r) throws DocumentException {
+        addDateBlock(STANDARD_FONTS, doc, r);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addDateBlock(LetterFonts f, Document doc, LetterPdfRequest r) throws DocumentException {
         // Labels ("Date:"/"Place:") bold, values normal — matches the
         // reference letter's convention; previously the whole line was
         // plain BODY (no bold at all).
         Paragraph d = new Paragraph();
-        d.add(new Chunk("Date: ", BODY_B));
-        d.add(new Chunk(safe(r.letterDate()), BODY));
+        d.add(new Chunk("Date: ", f.bodyB()));
+        d.add(new Chunk(safe(r.letterDate()), f.body()));
         d.setAlignment(Element.ALIGN_RIGHT);
         doc.add(d);
         Paragraph p = new Paragraph();
-        p.add(new Chunk("Place: ", BODY_B));
-        p.add(new Chunk(safe(r.place()), BODY));
+        p.add(new Chunk("Place: ", f.bodyB()));
+        p.add(new Chunk(safe(r.place()), f.body()));
         p.setAlignment(Element.ALIGN_RIGHT);
         doc.add(p);
     }
 
     private void addTitle(Document doc, String title) throws DocumentException {
-        Paragraph t = new Paragraph(title, TITLE);
+        addTitle(STANDARD_FONTS, doc, title);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addTitle(LetterFonts f, Document doc, String title) throws DocumentException {
+        Paragraph t = new Paragraph(title, f.title());
         t.setAlignment(Element.ALIGN_CENTER);
         t.setSpacingBefore(12f);
         t.setSpacingAfter(12f);
@@ -887,11 +951,16 @@ public class LetterPdfService {
      * — never invents or hardcodes a placeholder.
      */
     private void addAddressLines(Document doc, LetterPdfRequest r) throws DocumentException {
+        addAddressLines(STANDARD_FONTS, doc, r);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addAddressLines(LetterFonts f, Document doc, LetterPdfRequest r) throws DocumentException {
         String address = r.employeeAddress();
         if (address == null || address.isBlank()) return;
         for (String line : address.split("\n")) {
             if (line.isBlank()) continue;
-            doc.add(new Paragraph(line.trim(), BODY));
+            doc.add(new Paragraph(line.trim(), f.body()));
         }
     }
 
@@ -904,7 +973,12 @@ public class LetterPdfService {
      * is unaffected until it opts in by adding markers.
      */
     private void clause(Document doc, int n, String title, String body) throws DocumentException {
-        Paragraph t = new Paragraph(n + ". " + title, CLAUSE_T);
+        clause(STANDARD_FONTS, doc, n, title, body);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void clause(LetterFonts f, Document doc, int n, String title, String body) throws DocumentException {
+        Paragraph t = new Paragraph(n + ". " + title, f.clauseT());
         t.setSpacingBefore(8f);
         t.setSpacingAfter(2f);
         doc.add(t);
@@ -915,7 +989,7 @@ public class LetterPdfService {
         // Odd indices (1, 3, 5...) are the text that was between ** markers.
         for (int i = 0; i < parts.length; i++) {
             if (parts[i].isEmpty()) continue;
-            b.add(new Chunk(parts[i], i % 2 == 1 ? BODY_B : BODY));
+            b.add(new Chunk(parts[i], i % 2 == 1 ? f.bodyB() : f.body()));
         }
         doc.add(b);
     }
@@ -962,24 +1036,29 @@ public class LetterPdfService {
     }
 
     private void addSignatory(Document doc, LetterPdfRequest r) throws DocumentException {
-        Paragraph p = new Paragraph("For TechNext Technologies and Services Private Limited", BODY_B);
+        addSignatory(STANDARD_FONTS, doc, r);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addSignatory(LetterFonts f, Document doc, LetterPdfRequest r) throws DocumentException {
+        Paragraph p = new Paragraph("For TechNext Technologies and Services Private Limited", f.bodyB());
         p.setSpacingBefore(8f);
         doc.add(p);
         // signature image if present, else blank space for manual signing
-        addSignatureImageOrGap(doc, r.signatureFileId());
+        addSignatureImageOrGap(f, doc, r.signatureFileId());
         // Labels bold, values normal — matches reference; previously the
         // whole "Name: X" / "Designation: X" / "Date: X" line was plain BODY.
         Paragraph nameLine = new Paragraph();
-        nameLine.add(new Chunk("Name: ", BODY_B));
-        nameLine.add(new Chunk(safe(r.signatoryName()), BODY));
+        nameLine.add(new Chunk("Name: ", f.bodyB()));
+        nameLine.add(new Chunk(safe(r.signatoryName()), f.body()));
         doc.add(nameLine);
         Paragraph desigLine = new Paragraph();
-        desigLine.add(new Chunk("Designation: ", BODY_B));
-        desigLine.add(new Chunk(safe(r.signatoryTitle()), BODY));
+        desigLine.add(new Chunk("Designation: ", f.bodyB()));
+        desigLine.add(new Chunk(safe(r.signatoryTitle()), f.body()));
         doc.add(desigLine);
         Paragraph dateLine = new Paragraph();
-        dateLine.add(new Chunk("Date: ", BODY_B));
-        dateLine.add(new Chunk(safe(r.letterDate()), BODY));
+        dateLine.add(new Chunk("Date: ", f.bodyB()));
+        dateLine.add(new Chunk(safe(r.letterDate()), f.body()));
         doc.add(dateLine);
     }
 
@@ -1000,6 +1079,11 @@ public class LetterPdfService {
      * move to a new page.
      */
     private void addEmployeeAcceptance(Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
+        addEmployeeAcceptance(STANDARD_FONTS, doc, r, writer);
+    }
+
+    /** Font-parameterised twin of the method above (identical logic; only the fonts are injected). */
+    private void addEmployeeAcceptance(LetterFonts f, Document doc, LetterPdfRequest r, PdfWriter writer) throws DocumentException {
         // Rough but deliberately generous estimate of this block's printed
         // height: heading + intro line (up to 2 wrapped lines) + 3 signature
         // lines, each with their own leading/spacing — see the literal
@@ -1024,17 +1108,17 @@ public class LetterPdfService {
         cell.setBorder(Rectangle.NO_BORDER);
         cell.setPadding(0f);
 
-        Paragraph heading = new Paragraph("Employee Acceptance", CLAUSE_T);
+        Paragraph heading = new Paragraph("Employee Acceptance", f.clauseT());
         heading.setSpacingAfter(5f);
         cell.addElement(heading);
 
         Paragraph body = new Paragraph();
         body.setAlignment(Element.ALIGN_JUSTIFIED);
-        body.add(new Chunk("I, ", BODY));
-        body.add(new Chunk(safe(r.employeeName()), BODY_B));
+        body.add(new Chunk("I, ", f.body()));
+        body.add(new Chunk(safe(r.employeeName()), f.bodyB()));
         body.add(new Chunk(
                 ", have read, understood, and accepted the terms and conditions mentioned in this Offer Letter.",
-                BODY));
+                f.body()));
         body.setSpacingAfter(10f);
         cell.addElement(body);
 
@@ -1042,20 +1126,20 @@ public class LetterPdfService {
         // the whole line ("Signature: ___", "Date: ___", "Place: ___") was
         // plain BODY with no bold at all.
         Paragraph sig = new Paragraph();
-        sig.add(new Chunk("Signature: ", BODY_B));
-        sig.add(new Chunk("______________________________", BODY));
+        sig.add(new Chunk("Signature: ", f.bodyB()));
+        sig.add(new Chunk("______________________________", f.body()));
         sig.setSpacingAfter(7f);
         cell.addElement(sig);
 
         Paragraph date = new Paragraph();
-        date.add(new Chunk("Date: ", BODY_B));
-        date.add(new Chunk("__________________________________", BODY));
+        date.add(new Chunk("Date: ", f.bodyB()));
+        date.add(new Chunk("__________________________________", f.body()));
         date.setSpacingAfter(7f);
         cell.addElement(date);
 
         Paragraph place = new Paragraph();
-        place.add(new Chunk("Place: ", BODY_B));
-        place.add(new Chunk("__________________________________", BODY));
+        place.add(new Chunk("Place: ", f.bodyB()));
+        place.add(new Chunk("__________________________________", f.body()));
         cell.addElement(place);
 
         box.addCell(cell);
