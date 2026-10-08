@@ -23,4 +23,23 @@ public interface PayslipRepository extends JpaRepository<Payslip, Integer> {
           )
         """)
     java.math.BigDecimal sumTdsForFinancialYearSoFar(UUID employeeId, Integer fyStartYear, Integer fyEndYear);
+
+    // Same, but only payslips strictly BEFORE the given payroll month — "withheld prior to this
+    // run". The query above also counts the run's own month and any later months, which skews
+    // the projection when an earlier month is re-processed.
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT COALESCE(SUM(p.tdsAmount), 0) FROM Payslip p
+        WHERE p.employeeId = :employeeId
+          AND (
+            (p.year = :fyStartYear AND p.month >= 4)
+            OR (p.year = :fyEndYear AND p.month <= 3)
+          )
+          AND (p.year < :beforeYear OR (p.year = :beforeYear AND p.month < :beforeMonth))
+        """)
+    java.math.BigDecimal sumTdsForFinancialYearBefore(
+            @org.springframework.data.repository.query.Param("employeeId") UUID employeeId,
+            @org.springframework.data.repository.query.Param("fyStartYear") Integer fyStartYear,
+            @org.springframework.data.repository.query.Param("fyEndYear") Integer fyEndYear,
+            @org.springframework.data.repository.query.Param("beforeYear") Integer beforeYear,
+            @org.springframework.data.repository.query.Param("beforeMonth") Integer beforeMonth);
 }

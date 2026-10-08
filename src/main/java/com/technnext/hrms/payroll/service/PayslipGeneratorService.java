@@ -64,6 +64,14 @@ public class PayslipGeneratorService {
                             + run.getStatus() + " — payslips can no longer be added to it.");
         }
 
+        // A cancelled run has had its payslips removed on purpose; nothing should land under it
+        // (process it again first, which reopens the run).
+        if ("CANCELLED".equals(run.getStatus())) {
+            throw new BadRequestException(
+                    "Payroll run for " + run.getMonth() + "/" + run.getYear()
+                            + " is CANCELLED — process the run again before adding payslips to it.");
+        }
+
         if (!employeeRepository.existsById(employeeId)) {
             throw new ResourceNotFoundException("Employee not found: " + employeeId);
         }

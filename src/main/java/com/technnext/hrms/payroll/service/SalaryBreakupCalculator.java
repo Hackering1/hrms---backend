@@ -98,7 +98,14 @@ public class SalaryBreakupCalculator {
             throw new BadRequestException("A salary structure can have at most one REMAINDER component.");
         }
         if (remainderComponents.size() == 1) {
-            BigDecimal amt = remainderTotal.max(BigDecimal.ZERO); // never go negative; CTC over-allocation is a config error, not a negative allowance
+            // Over-allocation is a config error — reject it instead of silently paying more than the
+            // CTC (Rs.1 tolerance absorbs per-component rounding).
+            if (remainderTotal.compareTo(new BigDecimal("-1.00")) < 0) {
+                throw new BadRequestException(
+                        "The structure's fixed/percentage components add up to more than the CTC (over by Rs."
+                        + remainderTotal.negate() + " per month), leaving nothing for the REMAINDER component. Reduce the percentages/amounts.");
+            }
+            BigDecimal amt = remainderTotal.max(BigDecimal.ZERO);
             monthlyById.put(remainderComponents.get(0).getSalaryComponentId(), amt);
         } else if (remainderTotal.compareTo(BigDecimal.ZERO) != 0) {
             throw new BadRequestException(

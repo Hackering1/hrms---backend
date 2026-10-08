@@ -64,6 +64,12 @@ public class PayrollCalculationService {
                         "No active salary structure for employee " + employeeId + " as of " + year + "-" + month));
 
         Employee employee = employeeRepository.findById(employeeId).orElse(null);
+        // A soft-deleted employee (login disabled, hidden from the People list) must not be paid.
+        // process() records this as a skipped-employee warning; the Payslip Generator returns 400.
+        if (employee != null && "DELETED".equalsIgnoreCase(employee.getStatus())) {
+            throw new com.technnext.hrms.common.exception.BadRequestException(
+                    "Employee " + employee.getEmployeeCode() + " has been deleted — payroll is not processed for deleted employees.");
+        }
 
         List<EmployeeSalaryComponent> breakupRows = employeeSalaryComponentRepository.findByEmployeeSalaryId(salary.getId());
         Map<Integer, SalaryComponent> componentsById = salaryComponentRepository.findAllById(
@@ -110,7 +116,9 @@ public class PayrollCalculationService {
         grossEarnings = grossEarnings.add(adjustmentEarnings);
 
         // ── Statutory deductions ──────────────────────────────────────────
-        PfCalculator.PfResult pf = pfCalculator.calculate(proratedBasic, Boolean.TRUE.equals(salary.getPfApplicable()));
+        PfCalculator.PfResult pf = pfCalculator.calculate(
+                proratedBasic, Boolean.TRUE.equals(salary.getPfApplicable()),
+                java.time.YearMonth.of(year, month).atEndOfMonth());
         if (pf.employeeContribution().signum() > 0) lines.add(new LineItem("Provident Fund (Employee)", "DEDUCTION", pf.employeeContribution()));
         if (pf.employerContribution().signum() > 0) lines.add(new LineItem("Provident Fund (Employer)", "EMPLOYER_CONTRIBUTION", pf.employerContribution()));
 
@@ -125,7 +133,7 @@ public class PayrollCalculationService {
             tds = salary.getTdsOverrideMonthly();
         } else if ("NEW".equals(salary.getTaxRegime())) {
             int fyStart = month >= 4 ? year : year - 1;
-            BigDecimal ytdTds = payslipRepository.sumTdsForFinancialYearSoFar(employeeId, fyStart, fyStart + 1);
+            BigDecimal ytdTds = payslipRepository.sumTdsForFinancialYearBefore(employeeId, fyStart, fyStart + 1, year, month);
             tds = tdsCalculator.calculateMonthlyTds(taxableGross, ytdTds, month, year);
         } else {
             // OLD regime with no manual override set — cannot compute without investment

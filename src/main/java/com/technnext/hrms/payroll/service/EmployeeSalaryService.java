@@ -62,6 +62,18 @@ public class EmployeeSalaryService {
         if (Boolean.FALSE.equals(structure.getIsActive())) {
             throw new BadRequestException("Salary structure '" + structure.getName() + "' is not active.");
         }
+        if ("DELETED".equalsIgnoreCase(employee.getStatus())) {
+            throw new BadRequestException("Cannot assign a salary to a deleted employee.");
+        }
+        // Anything other than NEW/OLD used to be stored as-is and then silently took the "OLD regime,
+        // needs manual review" path; a negative override would be added to the pay as negative tax.
+        String regime = req.taxRegime() == null || req.taxRegime().isBlank() ? "NEW" : req.taxRegime().trim().toUpperCase();
+        if (!"NEW".equals(regime) && !"OLD".equals(regime)) {
+            throw new BadRequestException("taxRegime must be NEW or OLD.");
+        }
+        if (req.tdsOverrideMonthly() != null && req.tdsOverrideMonthly().signum() < 0) {
+            throw new BadRequestException("tdsOverrideMonthly cannot be negative.");
+        }
 
         // Close out any assignment still open as of the new effectiveFrom.
         employeeSalaryRepository.findActiveAsOf(req.employeeId(), req.effectiveFrom()).forEach(prev -> {
@@ -75,7 +87,7 @@ public class EmployeeSalaryService {
                 .annualCtc(req.annualCtc())
                 .effectiveFrom(req.effectiveFrom())
                 .effectiveTo(null)
-                .taxRegime(req.taxRegime() == null ? "NEW" : req.taxRegime())
+                .taxRegime(regime)
                 .pfApplicable(req.pfApplicable() == null ? true : req.pfApplicable())
                 .ptApplicable(req.ptApplicable() == null ? true : req.ptApplicable())
                 .tdsOverrideMonthly(req.tdsOverrideMonthly())

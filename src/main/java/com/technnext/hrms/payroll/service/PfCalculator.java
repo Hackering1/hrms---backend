@@ -40,9 +40,27 @@ public class PfCalculator {
         return rows.get(0);
     }
 
+    /**
+     * The PF revision in force on {@code asOf} (a revision with a future effective date must
+     * not apply yet; an old month being re-processed must use the rates of its own time).
+     * Falls back to the latest row when none is effective yet, i.e. the previous behaviour.
+     */
+    public PfSettings settingsAsOf(java.time.LocalDate asOf) {
+        if (asOf != null) {
+            List<PfSettings> rows = pfSettingsRepository.findEffectiveAsOf(asOf);
+            if (!rows.isEmpty()) return rows.get(0);
+        }
+        return currentSettings();
+    }
+
     /** @param monthlyBasic the employee's monthly Basic pay (already prorated for LOP, if applicable) */
     public PfResult calculate(BigDecimal monthlyBasic, boolean pfApplicable) {
-        PfSettings s = currentSettings();
+        return calculate(monthlyBasic, pfApplicable, null);
+    }
+
+    /** @param asOf the payroll month's last day — selects the PF revision effective for that month */
+    public PfResult calculate(BigDecimal monthlyBasic, boolean pfApplicable, java.time.LocalDate asOf) {
+        PfSettings s = settingsAsOf(asOf);
         if (!pfApplicable || !Boolean.TRUE.equals(s.getIsEnabled()) || monthlyBasic == null || monthlyBasic.signum() <= 0) {
             return new PfResult(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
         }

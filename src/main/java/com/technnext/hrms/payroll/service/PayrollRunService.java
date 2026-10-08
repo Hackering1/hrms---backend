@@ -37,6 +37,7 @@ public class PayrollRunService {
     private final PayslipComponentRepository payslipComponentRepository;
     private final EmployeeSalaryRepository employeeSalaryRepository;
     private final PayrollAdjustmentRepository payrollAdjustmentRepository;
+    private final PayoutBatchRepository payoutBatchRepository;
     private final PayrollCalculationService calculationService;
     private final PayslipPdfService payslipPdfService;
     private final EmployeeRepository employeeRepository;
@@ -140,6 +141,11 @@ public class PayrollRunService {
                 });
             }
 
+            if (r.netPay().signum() <= 0) {
+                warnings.append(employeeId).append(": net pay is Rs.").append(r.netPay())
+                        .append(" (deductions equal or exceed earnings) — review before approving; ");
+            }
+
             if (r.needsManualTdsReview()) {
                 warnings.append(employeeId).append(": OLD tax regime with no TDS override set (defaulted to Rs.0 — needs manual review); ");
             }
@@ -232,6 +238,11 @@ public class PayrollRunService {
         PayrollRun run = getEntity(id);
         if ("PAID".equals(run.getStatus())) {
             throw new BadRequestException("A PAID run cannot be cancelled.");
+        }
+        // Once a bank payout has been initiated, money may already have moved against these
+        // payslips — deleting them would orphan the transfers and allow a second run to pay again.
+        if (payoutBatchRepository.findByPayrollRunId(id).isPresent()) {
+            throw new BadRequestException("A bank payout has already been initiated for this payroll run, so it can no longer be cancelled.");
         }
         payrollAdjustmentRepository.findByYearAndMonth(run.getYear(), run.getMonth()).stream()
                 .filter(a -> id.equals(a.getAppliedInRunId()))

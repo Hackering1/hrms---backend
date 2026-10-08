@@ -46,7 +46,7 @@ public class SalaryStructureService {
                 .isActive(req.isActive() == null ? true : req.isActive())
                 .build();
         structure = structureRepository.save(structure);
-        saveComponents(structure.getId(), req.components());
+        saveComponents(structure.getId(), req.components(), java.util.Set.of());
         return getById(structure.getId());
     }
 
@@ -59,8 +59,16 @@ public class SalaryStructureService {
         if (req.isActive() != null) structure.setIsActive(req.isActive());
         structureRepository.save(structure);
 
+        // Lines already on the structure stay tolerated even if their component was deactivated since;
+        // only NEWLY added lines must point at an active component.
+        java.util.Set<Integer> existingComponentIds = structureComponentRepository
+                .findBySalaryStructureIdOrderByDisplayOrder(id).stream()
+                .map(SalaryStructureComponent::getSalaryComponentId)
+                .collect(Collectors.toSet());
+        // Validate BEFORE deleting so a rejected request leaves the old lines untouched
+        // (the transaction would roll back anyway, this just keeps the intent explicit).
         structureComponentRepository.deleteBySalaryStructureId(id);
-        saveComponents(id, req.components());
+        saveComponents(id, req.components(), existingComponentIds);
         return getById(id);
     }
 
@@ -73,15 +81,42 @@ public class SalaryStructureService {
         structureRepository.save(structure);
     }
 
-    private void saveComponents(Integer structureId, List<SalaryStructureRequest.ComponentLine> lines) {
+    private static final java.util.Set<String> CALC_TYPES = java.util.Set.of(
+            "FLAT", "PERCENT_OF_CTC", "PERCENT_OF_BASIC", "PERCENT_OF_GROSS", "REMAINDER");
+
+    private void saveComponents(Integer structureId, List<SalaryStructureRequest.ComponentLine> lines,
+                                java.util.Set<Integer> existingComponentIds) {
+        if (lines == null) {
+            throw new BadRequestException("A salary structure needs at least one component line.");
+        }
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
         for (SalaryStructureRequest.ComponentLine line : lines) {
             if (line.salaryComponentId() == null) {
                 throw new BadRequestException("Every component line needs a salaryComponentId.");
             }
-            componentRepository.findById(line.salaryComponentId())
+            // The CTC split is keyed by component id, so a repeated component would silently
+            // overwrite its earlier line and pay a different amount than the structure shows.
+            if (!seen.add(line.salaryComponentId())) {
+                throw new BadRequestException("Component id " + line.salaryComponentId() + " appears more than once in this structure.");
+            }
+            SalaryComponent component = componentRepository.findById(line.salaryComponentId())
                     .orElseThrow(() -> new BadRequestException("Unknown salary component id: " + line.salaryComponentId()));
+            if (!existingComponentIds.contains(line.salaryComponentId()) && Boolean.FALSE.equals(component.getIsActive())) {
+                throw new BadRequestException("Component '" + component.getName() + "' is inactive and cannot be added to a structure.");
+            }
 
             String calcType = line.calculationType() == null ? "FLAT" : line.calculationType();
+            if (!CALC_TYPES.contains(calcType)) {
+                throw new BadRequestException("Unknown calculation type '" + calcType + "' for component '" + component.getName() + "'.");
+            }
+            boolean percentType = "PERCENT_OF_CTC".equals(calcType) || "PERCENT_OF_BASIC".equals(calcType) || "PERCENT_OF_GROSS".equals(calcType);
+            if (percentType && line.percentage() != null
+                    && (line.percentage().signum() <= 0 || line.percentage().compareTo(new java.math.BigDecimal("100")) > 0)) {
+                throw new BadRequestException("Percentage for component '" + component.getName() + "' must be greater than 0 and at most 100.");
+            }
+            if (line.flatAmount() != null && line.flatAmount().signum() < 0) {
+                throw new BadRequestException("Flat amount for component '" + component.getName() + "' cannot be negative.");
+            }
             if (("PERCENT_OF_CTC".equals(calcType) || "PERCENT_OF_BASIC".equals(calcType) || "PERCENT_OF_GROSS".equals(calcType)) && line.percentage() == null) {
                 throw new BadRequestException("Component id " + line.salaryComponentId() + " needs a percentage for calculation type " + calcType + ".");
             }
