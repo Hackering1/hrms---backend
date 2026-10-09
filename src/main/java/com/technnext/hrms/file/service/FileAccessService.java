@@ -3,6 +3,7 @@ package com.technnext.hrms.file.service;
 import com.technnext.hrms.attendance.repository.AttendanceRepository;
 import com.technnext.hrms.document.repository.EmployeeDocumentRepository;
 import com.technnext.hrms.employee.repository.EmployeeRepository;
+import com.technnext.hrms.expense.repository.ExpenseClaimRepository;
 import com.technnext.hrms.file.entity.StoredFile;
 import com.technnext.hrms.letter.repository.GeneratedLetterRepository;
 import com.technnext.hrms.security.CurrentUserService;
@@ -40,6 +41,7 @@ public class FileAccessService {
     private final EmployeeDocumentRepository documentRepository;
     private final GeneratedLetterRepository letterRepository;
     private final AttendanceRepository attendanceRepository;
+    private final ExpenseClaimRepository expenseClaimRepository;
 
     public boolean canDownload(StoredFile file, CustomUserDetails principal) {
         if (principal == null) return false;
@@ -65,6 +67,9 @@ public class FileAccessService {
                 .forEach(d -> owningEmployeeIds.add(d.getEmployeeId()));
         letterRepository.findByFileUrlContaining(idStr)
                 .forEach(l -> owningEmployeeIds.add(l.getEmployeeId()));
+        // Expense receipts: reviewers (the claimant's manager / HR) can open them.
+        expenseClaimRepository.findByReceiptFileId(fileId)
+                .forEach(c -> owningEmployeeIds.add(c.getEmployeeId()));
         attendanceRepository.findByCheckInPhotoId(fileId)
                 .forEach(a -> owningEmployeeIds.add(a.getEmployeeId()));
         attendanceRepository.findByCheckOutPhotoId(fileId)
