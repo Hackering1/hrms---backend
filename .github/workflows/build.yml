@@ -17,4 +17,4 @@ jobs:
           java-version: "17"
           cache: maven
       - name: Compile application and test sources
-        run: chmod +x mvnw && ./mvnw -B -DskipTests package
+        run: chmod +x mvnw && ./mvnw -B package
