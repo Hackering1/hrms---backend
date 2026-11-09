@@ -27,9 +27,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PayrollRunService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final SuiteRecordRepository repository;
     private final PayrollProfileRepository profiles;
-    private final ObjectMapper objectMapper;
 
     @Transactional
     public List<SuiteRecord> calculateAndGenerate(PayrollRunRequest request, UUID actorId) {
@@ -75,7 +75,7 @@ public class PayrollRunService {
                     profile.getEmployerPfRate(), profile.getEmployerEsiRate(), input.paidDays(),
                     input.lopDays(), calendarDays, profile.getPolicyVersion());
             String details;
-            try { details = objectMapper.writeValueAsString(breakdown); }
+            try { details = OBJECT_MAPPER.writeValueAsString(breakdown); }
             catch (JsonProcessingException e) { throw new IllegalStateException("Could not serialize payroll breakdown", e); }
 
             SuiteRecord payroll = SuiteRecord.builder().module("payroll").title("Payroll " + request.period())
