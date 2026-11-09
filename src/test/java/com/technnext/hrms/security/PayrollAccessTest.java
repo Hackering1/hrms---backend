@@ -2,8 +2,8 @@ package com.technnext.hrms.security;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -22,7 +22,7 @@ class PayrollAccessTest {
 
     private CustomUserDetails principal(String authority) {
         CustomUserDetails principal = mock(CustomUserDetails.class);
-        when(principal.getAuthorities()).thenReturn(List.of(new SimpleGrantedAuthority(authority)));
+        doReturn(List.of(new SimpleGrantedAuthority(authority))).when(principal).getAuthorities();
         return principal;
     }
 }
