@@ -43,10 +43,12 @@ public class EmployeeController {
     public ApiResponse<List<EmployeeResponse>> getAll(
             @AuthenticationPrincipal CustomUserDetails principal,
             @RequestParam(defaultValue = "false") boolean includeDeleted) {
-        if (currentUser.isSuperAdmin(principal)) {
+        if (currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)) {
             return ApiResponse.ok(service.getAll(includeDeleted));
         }
-        return ApiResponse.ok(service.getByIds(currentUser.accessibleEmployeeIds(principal)));
+        return ApiResponse.ok(service.getByIds(currentUser.accessibleEmployeeIds(principal)).stream()
+                .map(e -> currentUser.isManager(principal) && !currentUser.isAdmin(principal)
+                        ? e.withoutSensitiveData() : e).toList());
     }
 
     // Self-service: the currently logged-in user's own employee record.
@@ -84,7 +86,10 @@ public class EmployeeController {
             @PathVariable UUID id,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, id);
-        return ApiResponse.ok(service.getById(id));
+        EmployeeResponse response = service.getById(id);
+        boolean ownRecord = currentUser.ownEmployeeIdOrEmpty(principal).filter(id::equals).isPresent();
+        return ApiResponse.ok(currentUser.isManager(principal) && !currentUser.isAdmin(principal) && !ownRecord
+                ? response.withoutSensitiveData() : response);
     }
 
     /**
@@ -129,7 +134,9 @@ public class EmployeeController {
         UUID managerToAssign = currentUser.isSuperAdmin(principal)
                 ? body.managerId()
                 : currentUser.ownEmployeeId(principal);
-        return ApiResponse.ok("Created", service.create(body, managerToAssign));
+        EmployeeResponse response = service.create(body, managerToAssign, currentUser.isAdmin(principal));
+        return ApiResponse.ok("Created", currentUser.isManager(principal) && !currentUser.isAdmin(principal)
+                ? response.withoutSensitiveData() : response);
     }
 
     /**
@@ -144,7 +151,10 @@ public class EmployeeController {
             @RequestBody EmployeeRequest body,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, id);
-        return ApiResponse.ok("Updated", service.update(id, body, currentUser.isAdmin(principal)));
+        EmployeeResponse response = service.update(id, body, currentUser.isAdmin(principal));
+        boolean ownRecord = currentUser.ownEmployeeIdOrEmpty(principal).filter(id::equals).isPresent();
+        return ApiResponse.ok("Updated", currentUser.isManager(principal) && !currentUser.isAdmin(principal) && !ownRecord
+                ? response.withoutSensitiveData() : response);
     }
 
     // Admin: link an employee record to a user account (enables that user's self-service).
