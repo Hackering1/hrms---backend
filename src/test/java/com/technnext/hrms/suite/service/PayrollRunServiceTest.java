@@ -67,8 +67,8 @@ class PayrollRunServiceTest {
         assertEquals("PENDING_APPROVAL", payslip.getStatus());
         assertEquals(employeeId, payslip.getEmployeeId());
         JsonNode breakdown = JSON.readTree(payslip.getDetails());
-        assertEquals(new BigDecimal("3000.00"), breakdown.path("employeePf").decimalValue());
-        assertEquals(new BigDecimal("200.00"), breakdown.path("professionalTax").decimalValue());
-        assertEquals(new BigDecimal("46300.00"), breakdown.path("netPay").decimalValue());
+        assertEquals(0, new BigDecimal("3000.00").compareTo(breakdown.path("employeePf").decimalValue()));
+        assertEquals(0, new BigDecimal("200.00").compareTo(breakdown.path("professionalTax").decimalValue()));
+        assertEquals(0, new BigDecimal("46300.00").compareTo(breakdown.path("netPay").decimalValue()));
     }
 }
