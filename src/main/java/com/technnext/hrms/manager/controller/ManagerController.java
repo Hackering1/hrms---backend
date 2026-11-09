@@ -32,7 +32,7 @@ public class ManagerController {
             @PathVariable UUID managerId,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, managerId);
-        return ApiResponse.ok(service.getTeam(managerId));
+        return ApiResponse.ok(maskIfNeeded(service.getTeam(managerId), principal));
     }
 
     @GetMapping("/{managerId}/team-ids")
@@ -46,8 +46,8 @@ public class ManagerController {
     // Managers who already have reports.
     @GetMapping("/all")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','HR_ADMIN','HR_EXECUTIVE')")
-    public ApiResponse<List<EmployeeResponse>> getAllManagers() {
-        return ApiResponse.ok(service.getAllManagers());
+    public ApiResponse<List<EmployeeResponse>> getAllManagers(@AuthenticationPrincipal CustomUserDetails principal) {
+        return ApiResponse.ok(maskIfNeeded(service.getAllManagers(), principal));
     }
 
     // Every employee eligible to be a manager (has a MANAGER/HR login role).
@@ -76,7 +76,12 @@ public class ManagerController {
             @PathVariable UUID employeeId,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, employeeId);
-        return ApiResponse.ok(service.getManagers(employeeId));
+        return ApiResponse.ok(maskIfNeeded(service.getManagers(employeeId), principal));
+    }
+
+    private List<EmployeeResponse> maskIfNeeded(List<EmployeeResponse> employees, CustomUserDetails principal) {
+        if (currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)) return employees;
+        return employees.stream().map(EmployeeResponse::withoutSensitiveData).toList();
     }
 
     // Assigning teams is a Super Admin action (you confirmed only Super Admin

@@ -56,6 +56,12 @@ public class CurrentUserService {
                 || hasRole(principal, "ROLE_HR_EXECUTIVE");
     }
 
+    /** Payroll access is separate from general HR administration. */
+    public boolean canManagePayroll(CustomUserDetails principal) {
+        return isAdmin(principal) || isSuperAdmin(principal)
+                || hasRole(principal, "ROLE_FINANCE_ADMIN");
+    }
+
     private boolean hasRole(CustomUserDetails principal, String role) {
         if (principal == null) return false;
         return principal.getAuthorities().stream()
@@ -90,7 +96,7 @@ public class CurrentUserService {
     // ── scope ───────────────────────────────────────────────────────────────────
 
     public Set<UUID> accessibleEmployeeIds(CustomUserDetails principal) {
-        if (isSuperAdmin(principal)) {
+        if (isAdmin(principal) || isSuperAdmin(principal)) {
             return employeeRepository.findAll().stream()
                     .map(e -> e.getId())
                     .collect(Collectors.toSet());
@@ -105,7 +111,7 @@ public class CurrentUserService {
     }
 
     public boolean canAccessEmployee(CustomUserDetails principal, UUID employeeId) {
-        if (isSuperAdmin(principal)) return true;                 // no own-employee needed
+        if (isAdmin(principal) || isSuperAdmin(principal)) return true; // HR may access all employee records
         Optional<UUID> own = ownEmployeeIdOrEmpty(principal);
         if (own.isEmpty()) return false;                          // not admin, no profile -> no access
         if (own.get().equals(employeeId)) return true;
@@ -127,7 +133,7 @@ public class CurrentUserService {
      *  - Employee: themselves only.
      */
     public UUID resolveActingEmployeeId(CustomUserDetails principal, UUID requestedEmployeeId) {
-        if (isSuperAdmin(principal)) {
+        if (isAdmin(principal) || isSuperAdmin(principal)) {
             if (requestedEmployeeId != null) return requestedEmployeeId;
             return ownEmployeeIdOrEmpty(principal).orElseThrow(() -> new BadRequestException(
                     "Select an employee to perform this action for."));
