@@ -32,7 +32,7 @@ public class ManagerController {
             @PathVariable UUID managerId,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, managerId);
-        return ApiResponse.ok(service.getTeam(managerId));
+        return ApiResponse.ok(maskIfNeeded(service.getTeam(managerId), principal));
     }
 
     @GetMapping("/{managerId}/team-ids")
@@ -45,28 +45,28 @@ public class ManagerController {
 
     // Managers who already have reports.
     @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','HR_ADMIN','HR_EXECUTIVE')")
-    public ApiResponse<List<EmployeeResponse>> getAllManagers() {
-        return ApiResponse.ok(service.getAllManagers());
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
+    public ApiResponse<List<EmployeeResponse>> getAllManagers(@AuthenticationPrincipal CustomUserDetails principal) {
+        return ApiResponse.ok(maskIfNeeded(service.getAllManagers(), principal));
     }
 
     // Every employee eligible to be a manager (has a MANAGER/HR login role).
     @GetMapping("/assignable")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<List<EmployeeResponse>> getAssignableManagers() {
         return ApiResponse.ok(service.getAssignableManagers());
     }
 
     // All assignment rows (id + employeeId + managerId) for the admin screen.
     @GetMapping("/assignments")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<List<EmployeeManager>> getAllAssignments() {
         return ApiResponse.ok(service.getAllAssignments());
     }
 
     // NEW: org-wide employees-per-manager breakdown (Super Admin analytics).
     @GetMapping("/team-sizes")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<List<ManagerTeamSize>> getTeamSizes() {
         return ApiResponse.ok(service.getTeamSizes());
     }
@@ -76,19 +76,24 @@ public class ManagerController {
             @PathVariable UUID employeeId,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, employeeId);
-        return ApiResponse.ok(service.getManagers(employeeId));
+        return ApiResponse.ok(maskIfNeeded(service.getManagers(employeeId), principal));
+    }
+
+    private List<EmployeeResponse> maskIfNeeded(List<EmployeeResponse> employees, CustomUserDetails principal) {
+        if (currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)) return employees;
+        return employees.stream().map(EmployeeResponse::withoutSensitiveData).toList();
     }
 
     // Assigning teams is a Super Admin action (you confirmed only Super Admin
     // creates/assigns employees).
     @PostMapping("/assign")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<EmployeeManager> assign(@RequestBody AssignManagerRequest body) {
         return ApiResponse.ok("Manager assigned", service.assign(body));
     }
 
     @DeleteMapping("/assign/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> unassign(@PathVariable Integer id) {
         service.unassign(id);
         return ApiResponse.ok("Unassigned", null);

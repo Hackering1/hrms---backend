@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  * Single source of truth for "who can this logged-in user see / act for?".
  *
  * HIERARCHY:
- *   SUPER_ADMIN  -> everyone
+ *   SUPER_ADMIN / FINANCE_ADMIN -> everyone
  *   MANAGER (=HR)-> their own team + themselves
  *   EMPLOYEE     -> themselves only
  *
@@ -41,19 +41,28 @@ public class CurrentUserService {
     public boolean isManager(CustomUserDetails principal) {
         return hasRole(principal, "ROLE_MANAGER")
                 || hasRole(principal, "ROLE_HR_ADMIN")
-                || hasRole(principal, "ROLE_HR_EXECUTIVE");
+                || hasRole(principal, "ROLE_HR_EXECUTIVE")
+                || hasRole(principal, "ROLE_FINANCE_ADMIN");
     }
 
     /**
-     * "Admin-level" for HR data-integrity purposes: Super Admin or an HR role.
+     * "Admin-level" for HR data-integrity purposes: Super Admin, Finance Admin, or an HR role.
      * Deliberately EXCLUDES plain MANAGER — a manager may create/edit employees
      * on their team, but must not be able to change an existing Employee ID
-     * (employee_code). Only HR/Super Admin can.
+     * (employee_code). Only HR, Finance Admin, or Super Admin can.
      */
     public boolean isAdmin(CustomUserDetails principal) {
         return hasRole(principal, "ROLE_SUPER_ADMIN")
                 || hasRole(principal, "ROLE_HR_ADMIN")
-                || hasRole(principal, "ROLE_HR_EXECUTIVE");
+                || hasRole(principal, "ROLE_HR_EXECUTIVE")
+                || hasRole(principal, "ROLE_FINANCE_ADMIN");
+    }
+
+    /** Payroll access is separate from general HR administration. */
+    public boolean canManagePayroll(CustomUserDetails principal) {
+        // Payroll is private to Finance Admin (the organization admin) and Super Admin.
+        // HR users and managers do not receive salary or payslip data by default.
+        return isSuperAdmin(principal) || hasRole(principal, "ROLE_FINANCE_ADMIN");
     }
 
     private boolean hasRole(CustomUserDetails principal, String role) {
@@ -90,7 +99,7 @@ public class CurrentUserService {
     // ── scope ───────────────────────────────────────────────────────────────────
 
     public Set<UUID> accessibleEmployeeIds(CustomUserDetails principal) {
-        if (isSuperAdmin(principal)) {
+        if (isAdmin(principal) || isSuperAdmin(principal)) {
             return employeeRepository.findAll().stream()
                     .map(e -> e.getId())
                     .collect(Collectors.toSet());
@@ -105,7 +114,7 @@ public class CurrentUserService {
     }
 
     public boolean canAccessEmployee(CustomUserDetails principal, UUID employeeId) {
-        if (isSuperAdmin(principal)) return true;                 // no own-employee needed
+        if (isAdmin(principal) || isSuperAdmin(principal)) return true; // organization admins may access all employee records
         Optional<UUID> own = ownEmployeeIdOrEmpty(principal);
         if (own.isEmpty()) return false;                          // not admin, no profile -> no access
         if (own.get().equals(employeeId)) return true;
@@ -127,7 +136,7 @@ public class CurrentUserService {
      *  - Employee: themselves only.
      */
     public UUID resolveActingEmployeeId(CustomUserDetails principal, UUID requestedEmployeeId) {
-        if (isSuperAdmin(principal)) {
+        if (isAdmin(principal) || isSuperAdmin(principal)) {
             if (requestedEmployeeId != null) return requestedEmployeeId;
             return ownEmployeeIdOrEmpty(principal).orElseThrow(() -> new BadRequestException(
                     "Select an employee to perform this action for."));

@@ -59,7 +59,7 @@ public class LetterPdfController {
             Pattern.compile("^[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}$");
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ResponseEntity<byte[]> generate(@RequestBody LetterPdfRequest request) {
         LetterPdfRequest enriched = enrich(request);
         validateInternshipOffer(enriched);
@@ -86,7 +86,7 @@ public class LetterPdfController {
      * response is a slim projection (no Aadhaar/PAN/bank data).
      */
     @GetMapping("/reporting-managers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<List<ReportingManagerOption>> reportingManagers() {
         List<ReportingManagerOption> options = managerService.getAssignableManagers().stream()
                 .filter(e -> !"DELETED".equalsIgnoreCase(e.status()) && !"EXITED".equalsIgnoreCase(e.status()))
@@ -115,7 +115,7 @@ public class LetterPdfController {
      * the two are reported distinctly to the frontend.
      */
     @PostMapping("/send-email")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ResponseEntity<ApiResponse<String>> sendEmail(@RequestBody LetterEmailRequest request) {
         String email = request.recipientEmail() == null ? "" : request.recipientEmail().trim();
         if (email.isBlank() || !EMAIL_PATTERN.matcher(email).matches()) {

@@ -34,7 +34,7 @@ public class TicketController {
     private final TicketService service;
 
     private static final List<String> PRIVILEGED_ROLES =
-            List.of("ROLE_SUPER_ADMIN", "ROLE_HR_ADMIN", "ROLE_HR_EXECUTIVE", "ROLE_MANAGER");
+            List.of("ROLE_SUPER_ADMIN", "ROLE_HR_ADMIN", "ROLE_HR_EXECUTIVE", "ROLE_MANAGER", "ROLE_FINANCE_ADMIN");
 
     @GetMapping
     public ApiResponse<List<Ticket>> getAll(@AuthenticationPrincipal CustomUserDetails principal) {
@@ -75,9 +75,9 @@ public class TicketController {
         return ApiResponse.ok("Ticket raised", service.create(body, raisedById, raisedByEmail));
     }
 
-    // Resolve / change status — SUPER ADMIN ONLY.
+    // Resolve / change status — HRMS administrators only.
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Ticket> updateStatus(@PathVariable Integer id, @RequestBody TicketStatusUpdate body) {
         return ApiResponse.ok("Ticket updated", service.updateStatus(id, body));
     }

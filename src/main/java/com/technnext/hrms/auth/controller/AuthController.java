@@ -42,7 +42,7 @@ public class AuthController {
 
     /** Super admin: reset another user's password (by their login email). */
     @PostMapping("/admin/reset-password")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> adminResetPassword(@RequestBody java.util.Map<String, String> body) {
         authService.adminResetPasswordByEmail(body.get("email"), body.get("newPassword"));
         return ApiResponse.ok("Password reset", null);
@@ -50,13 +50,12 @@ public class AuthController {
 
     /**
      * Creating accounts is an admin action, so this endpoint sits under /api/auth
-     * but is protected. SUPER_ADMIN / HR_ADMIN may register users, but only a
-     * SUPER_ADMIN may create another SUPER_ADMIN (SA #9) — this prevents a lower
-     * admin from escalating an account to full super-admin access.
+     * but is protected. Finance Admin and Super Admin can register users; HR
+     * roles may register non-admin accounts but cannot create a Super Admin.
      */
     @PostMapping("/register")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN') and "
-            + "(#request.roleName() != 'SUPER_ADMIN' or hasRole('SUPER_ADMIN'))")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN') and "
+            + "(#request.roleName() != 'SUPER_ADMIN' or hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN'))")
     public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ApiResponse.ok("User registered", authService.register(request));
     }

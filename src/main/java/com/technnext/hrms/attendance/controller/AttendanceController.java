@@ -48,7 +48,7 @@ public class AttendanceController {
 
     // Admin only: mark attendance for many employees at once.
     @PostMapping("/bulk")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Integer> bulkMark(@RequestBody BulkAttendanceRequest body) {
         int n = service.bulkMark(body);
         return ApiResponse.ok(n + " attendance record(s) marked", n);
@@ -65,7 +65,7 @@ public class AttendanceController {
 
     // Whole-day roster is management data — privileged roles only.
     @GetMapping("/date/{date}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<List<Attendance>> forDate(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ApiResponse.ok(service.forDate(date));

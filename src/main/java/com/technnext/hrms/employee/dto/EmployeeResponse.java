@@ -55,6 +55,17 @@ public record EmployeeResponse(
         List<EducationDto> education,
         List<ExperienceDto> experience
 ) {
+    /** Remove statutory and bank identifiers from manager/team-list responses. */
+    public EmployeeResponse withoutSensitiveData() {
+        return new EmployeeResponse(id, employeeCode, firstName, lastName, middleName, dateOfBirth,
+                gender, bloodGroup, maritalStatus, nationality, dateOfJoining, employmentType,
+                status, onboardingStatus, branchId, branchName, departmentId, departmentName,
+                designationId, designationName, shiftId, shiftName, probationEndDate,
+                confirmationDate, isFresher, null, null, null, null, null, null, email,
+                userId, null, profilePhotoUrl, reportingManagerId,
+                reportingManagerName, contact, education, experience);
+    }
+
     /** Base mapping without nested lists, manager, or contact (all default to empty/null). */
     public static EmployeeResponse from(Employee e) {
         return from(e, List.of(), List.of(), null, null, null);

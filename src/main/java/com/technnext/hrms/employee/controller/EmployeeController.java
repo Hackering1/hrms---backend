@@ -43,10 +43,12 @@ public class EmployeeController {
     public ApiResponse<List<EmployeeResponse>> getAll(
             @AuthenticationPrincipal CustomUserDetails principal,
             @RequestParam(defaultValue = "false") boolean includeDeleted) {
-        if (currentUser.isSuperAdmin(principal)) {
+        if (currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)) {
             return ApiResponse.ok(service.getAll(includeDeleted));
         }
-        return ApiResponse.ok(service.getByIds(currentUser.accessibleEmployeeIds(principal)));
+        return ApiResponse.ok(service.getByIds(currentUser.accessibleEmployeeIds(principal)).stream()
+                .map(e -> currentUser.isManager(principal) && !currentUser.isAdmin(principal)
+                        ? e.withoutSensitiveData() : e).toList());
     }
 
     // Self-service: the currently logged-in user's own employee record.
@@ -84,23 +86,26 @@ public class EmployeeController {
             @PathVariable UUID id,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, id);
-        return ApiResponse.ok(service.getById(id));
+        EmployeeResponse response = service.getById(id);
+        boolean ownRecord = currentUser.ownEmployeeIdOrEmpty(principal).filter(id::equals).isPresent();
+        return ApiResponse.ok(currentUser.isManager(principal) && !currentUser.isAdmin(principal) && !ownRecord
+                ? response.withoutSensitiveData() : response);
     }
 
     /**
      * Prefill values for the Add-Employee form:
      *  - employeeCode: the next suggested Emp ID (TN0001, TN0002 …), shown as a default.
      *  - managerId / managerName: when a MANAGER opens the form, their own record — so
-     *    the new hire defaults to reporting to them. A SUPER_ADMIN gets no default and
-     *    picks the manager from the dropdown instead.
+     *    the new hire defaults to reporting to them. Organization admins get no
+     *    default and can pick a reporting manager from the dropdown.
      */
     @GetMapping("/new-defaults")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Map<String, Object>> newEmployeeDefaults(
             @AuthenticationPrincipal CustomUserDetails principal) {
         Map<String, Object> out = new HashMap<>();
         out.put("employeeCode", service.nextEmployeeCode());
-        if (!currentUser.isSuperAdmin(principal)) {
+        if (!currentUser.isAdmin(principal) && !currentUser.isSuperAdmin(principal)) {
             currentUser.ownEmployeeIdOrEmpty(principal).ifPresent(mid -> {
                 EmployeeResponse me = service.getById(mid);
                 out.put("managerId", mid);
@@ -112,24 +117,25 @@ public class EmployeeController {
 
     /**
      * Create an employee. The reporting manager is resolved by role:
-     *  - MANAGER (or HR-as-manager): forced to the creating manager (the "belonging manager"),
-     *    so any hire added from the Manager Portal auto-joins that manager's team.
-     *  - SUPER_ADMIN: uses the managerId selected on the request (may be null = unassigned).
+     *  - MANAGER: forced to the creating manager (the "belonging manager"), so hires
+     *    added from the Manager Portal auto-join that manager's team.
+     *  - HRMS admins: use the managerId selected on the request (may be null = unassigned).
      *
-     * Only a SUPER_ADMIN may create another SUPER_ADMIN login (mirrors the guard
-     * on /api/auth/register) — this prevents an HR/Manager account from
-     * escalating a new hire straight to full super-admin access.
+     * The organization Finance Admin and Super Admin can create all account roles.
+     * HR and Manager accounts cannot escalate a new hire to Super Admin.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER') and "
-            + "(#body.loginRole() != 'SUPER_ADMIN' or hasRole('SUPER_ADMIN'))")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN') and "
+            + "(#body.loginRole() != 'SUPER_ADMIN' or hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN'))")
     public ApiResponse<EmployeeResponse> create(
             @RequestBody EmployeeRequest body,
             @AuthenticationPrincipal CustomUserDetails principal) {
-        UUID managerToAssign = currentUser.isSuperAdmin(principal)
+        UUID managerToAssign = currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)
                 ? body.managerId()
                 : currentUser.ownEmployeeId(principal);
-        return ApiResponse.ok("Created", service.create(body, managerToAssign));
+        EmployeeResponse response = service.create(body, managerToAssign, currentUser.isAdmin(principal));
+        return ApiResponse.ok("Created", currentUser.isManager(principal) && !currentUser.isAdmin(principal)
+                ? response.withoutSensitiveData() : response);
     }
 
     /**
@@ -138,24 +144,27 @@ public class EmployeeController {
      * edit anyone. This closes the write-side gap left open in the Foundation batch.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<EmployeeResponse> update(
             @PathVariable UUID id,
             @RequestBody EmployeeRequest body,
             @AuthenticationPrincipal CustomUserDetails principal) {
         currentUser.assertCanAccessEmployee(principal, id);
-        return ApiResponse.ok("Updated", service.update(id, body, currentUser.isAdmin(principal)));
+        EmployeeResponse response = service.update(id, body, currentUser.isAdmin(principal));
+        boolean ownRecord = currentUser.ownEmployeeIdOrEmpty(principal).filter(id::equals).isPresent();
+        return ApiResponse.ok("Updated", currentUser.isManager(principal) && !currentUser.isAdmin(principal) && !ownRecord
+                ? response.withoutSensitiveData() : response);
     }
 
     // Admin: link an employee record to a user account (enables that user's self-service).
     @PutMapping("/{id}/link-user/{userId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<EmployeeResponse> linkUser(@PathVariable UUID id, @PathVariable UUID userId) {
         return ApiResponse.ok("Linked", service.linkUser(id, userId));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable UUID id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

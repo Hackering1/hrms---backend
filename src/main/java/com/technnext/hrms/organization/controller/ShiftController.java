@@ -29,19 +29,19 @@ public class ShiftController {
 
     // Master data: Super Admin + Manager (your confirmed rule).
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Shift> create(@Valid @RequestBody Shift body) {
         return ApiResponse.ok("Created", service.create(body));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Shift> update(@PathVariable Integer id, @Valid @RequestBody Shift body) {
         return ApiResponse.ok("Updated", service.update(id, body));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

@@ -30,7 +30,7 @@ public class LeaveBalanceController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<LeaveBalance> allocate(@RequestBody LeaveBalanceCreate body) {
         return ApiResponse.ok("Allocated", service.allocate(body));
     }

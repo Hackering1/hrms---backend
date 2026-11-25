@@ -144,6 +144,11 @@ public class EmployeeService {
      */
     @Transactional
     public EmployeeResponse create(EmployeeRequest req, UUID managerIdToAssign) {
+        return create(req, managerIdToAssign, true);
+    }
+
+    @Transactional
+    public EmployeeResponse create(EmployeeRequest req, UUID managerIdToAssign, boolean isAdmin) {
         String code = (req.employeeCode() == null || req.employeeCode().isBlank())
                 ? generateEmployeeCode()
                 : req.employeeCode().trim();
@@ -151,7 +156,7 @@ public class EmployeeService {
             throw new BadRequestException("Employee code already exists: " + code);
         }
         Employee e = new Employee();
-        apply(e, req);
+        apply(e, req, isAdmin);
         e.setEmployeeCode(code); // the (possibly generated) code always wins
         Employee saved = employeeRepository.save(e);
         saveChildren(saved.getId(), req);
@@ -608,12 +613,14 @@ public class EmployeeService {
         e.setConfirmationDate(req.confirmationDate());
 
         e.setIsFresher(req.isFresher() == null ? Boolean.TRUE : req.isFresher());
-        e.setAadhaarNumber(req.aadhaarNumber());
-        e.setPanNumber(req.panNumber());
-        e.setBankAccountNumber(req.bankAccountNumber());
-        e.setBankName(req.bankName());
-        e.setIfscCode(req.ifscCode());
-        e.setUanNumber(req.uanNumber());
+        if (isAdmin) {
+            e.setAadhaarNumber(req.aadhaarNumber());
+            e.setPanNumber(req.panNumber());
+            e.setBankAccountNumber(req.bankAccountNumber());
+            e.setBankName(req.bankName());
+            e.setIfscCode(req.ifscCode());
+            e.setUanNumber(req.uanNumber());
+        }
         e.setEmail(req.email());
 
         e.setBranch(req.branchId() == null ? null :

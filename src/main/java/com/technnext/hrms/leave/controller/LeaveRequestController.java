@@ -42,7 +42,7 @@ public class LeaveRequestController {
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<List<LeaveRequestResponse>> getPending(
             @AuthenticationPrincipal CustomUserDetails principal) {
         if (currentUser.isSuperAdmin(principal)) {
@@ -93,7 +93,7 @@ public class LeaveRequestController {
     }
 
     @PutMapping("/{id}/decision")
-    @PreAuthorize("hasAnyRole('MANAGER','HR_ADMIN','HR_EXECUTIVE','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MANAGER','HR_ADMIN','HR_EXECUTIVE','SUPER_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<LeaveRequestResponse> decide(
             @PathVariable Integer id,
             @RequestBody LeaveApproval body,
@@ -115,7 +115,7 @@ public class LeaveRequestController {
      * HR LEAVE REGULARIZATION — edit an existing leave. Audited.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<LeaveRequestResponse> regularize(
             @PathVariable Integer id,
             @RequestBody LeaveRegularizeRequest body,
@@ -136,7 +136,7 @@ public class LeaveRequestController {
      * HR LEAVE REGULARIZATION — cancel a leave (returns days to balance). Audited.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<LeaveRequestResponse> cancel(
             @PathVariable Integer id,
             @AuthenticationPrincipal CustomUserDetails principal) {
@@ -159,7 +159,7 @@ public class LeaveRequestController {
      * and left no way to actually clear out old/cancelled rows.
      */
     @DeleteMapping("/{id}/permanent")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<Void> deletePermanent(
             @PathVariable Integer id,
             @AuthenticationPrincipal CustomUserDetails principal) {
