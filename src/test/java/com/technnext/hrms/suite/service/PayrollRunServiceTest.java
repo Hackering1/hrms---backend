@@ -58,7 +58,7 @@ class PayrollRunServiceTest {
         assertEquals(1, result.size());
         assertEquals("payroll", result.get(0).getModule());
         assertEquals("CALCULATED", result.get(0).getStatus());
-        assertEquals(new BigDecimal("46300.00"), result.get(0).getAmount());
+        assertEquals(new BigDecimal("46800.00"), result.get(0).getAmount());
 
         ArgumentCaptor<SuiteRecord> saved = ArgumentCaptor.forClass(SuiteRecord.class);
         verify(records, times(2)).save(saved.capture());
@@ -69,7 +69,9 @@ class PayrollRunServiceTest {
         JsonNode breakdown = JSON.readTree(payslip.getDetails());
         assertEquals(0, new BigDecimal("3000.00").compareTo(breakdown.path("employeePf").decimalValue()));
         assertEquals(0, new BigDecimal("200.00").compareTo(breakdown.path("professionalTax").decimalValue()));
-        assertEquals(0, new BigDecimal("46300.00").compareTo(breakdown.path("netPay").decimalValue()));
+        assertEquals(0, new BigDecimal("46800.00").compareTo(breakdown.path("netPay").decimalValue()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(breakdown.path("employeeEsi").decimalValue()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(breakdown.path("tds").decimalValue()));
     }
 
     @Test
@@ -100,7 +102,7 @@ class PayrollRunServiceTest {
         List<SuiteRecord> result = new PayrollRunService(records, profiles).calculateAndGenerate(
                 new PayrollRunRequest("2026-10", List.of(new PayrollRunEmployeeInput(employeeId, 31, 0))), UUID.randomUUID());
 
-        assertEquals(new BigDecimal("56300.00"), result.get(0).getAmount());
+        assertEquals(new BigDecimal("56800.00"), result.get(0).getAmount());
         JsonNode breakdown = JSON.readTree(result.get(0).getDetails());
         assertEquals(0, new BigDecimal("10000.00").compareTo(breakdown.path("performanceBonus").decimalValue()));
         assertEquals(0, new BigDecimal("60000.00").compareTo(breakdown.path("gross").decimalValue()));
