@@ -17,4 +17,7 @@ public record PayrollProfileRequest(
         @NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal employerPfRate,
         @NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal employerEsiRate,
         @NotNull @DecimalMin("0.00") BigDecimal gratuity,
+        Boolean performanceBonusEnabled,
+        @DecimalMin("0.00") BigDecimal performanceBonus,
         @Size(max = 80) String policyVersion) { }
+

@@ -57,11 +57,16 @@ public class PayrollRunService {
             BigDecimal hra = prorate(profile.getHra(), factor);
             BigDecimal lta = prorate(profile.getLta(), factor);
             BigDecimal allowance = prorate(fixedAllowance, factor);
-            BigDecimal gross = basic.add(hra).add(lta).add(allowance).setScale(2, RoundingMode.HALF_UP);
+            boolean bonusEnabled = Boolean.TRUE.equals(profile.getPerformanceBonusEnabled());
+            BigDecimal performanceBonus = bonusEnabled
+                    ? prorate(profile.getPerformanceBonus() == null ? BigDecimal.ZERO : profile.getPerformanceBonus(), factor)
+                    : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal gross = basic.add(hra).add(lta).add(allowance).add(performanceBonus)
+                    .setScale(2, RoundingMode.HALF_UP);
             BigDecimal employeePf = percent(basic, profile.getPfRate());
-            BigDecimal employeeEsi = percent(gross, profile.getEsiRate());
+            BigDecimal employeeEsi = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
             BigDecimal professionalTax = prorate(profile.getProfessionalTax(), factor);
-            BigDecimal tds = prorate(profile.getTds(), factor);
+            BigDecimal tds = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
             BigDecimal net = gross.subtract(employeePf).subtract(employeeEsi).subtract(professionalTax).subtract(tds).setScale(2, RoundingMode.HALF_UP);
             if (net.signum() < 0) throw new BadRequestException("Deductions cannot exceed gross salary.");
             BigDecimal employerPf = percent(basic, profile.getEmployerPfRate());
@@ -71,7 +76,7 @@ public class PayrollRunService {
 
             var breakdown = new PayrollBreakdown(profile.getGross(), basic, hra, lta, allowance, gross,
                     employeePf, employeeEsi, professionalTax, tds, net, employerPf, employerEsi,
-                    gratuity, employerCost, profile.getPfRate(), profile.getEsiRate(),
+                    gratuity, employerCost, bonusEnabled, performanceBonus, profile.getPfRate(), profile.getEsiRate(),
                     profile.getEmployerPfRate(), profile.getEmployerEsiRate(), input.paidDays(),
                     input.lopDays(), calendarDays, profile.getPolicyVersion());
             String details;
@@ -102,6 +107,8 @@ public class PayrollRunService {
             BigDecimal fixedAllowance, BigDecimal gross, BigDecimal employeePf, BigDecimal employeeEsi,
             BigDecimal professionalTax, BigDecimal tds, BigDecimal netPay, BigDecimal employerPf,
             BigDecimal employerEsi, BigDecimal gratuity, BigDecimal employerCost,
+            boolean performanceBonusEnabled, BigDecimal performanceBonus,
             BigDecimal employeePfRate, BigDecimal employeeEsiRate, BigDecimal employerPfRate,
             BigDecimal employerEsiRate, int paidDays, int lopDays, int calendarDays, String policyVersion) { }
 }
+

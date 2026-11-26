@@ -99,7 +99,8 @@ public class PayslipPdfService {
         } catch (Exception ignored) { logoCell.addElement(new Paragraph("TECHNEXT", BOLD)); }
         header.addCell(logoCell);
         PdfPCell companyCell = new PdfPCell(); companyCell.setBorder(Rectangle.NO_BORDER); companyCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        Paragraph company = new Paragraph(COMPANY, font(12, true, INK)); company.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(company);
+        companyCell.setNoWrap(true);
+        Paragraph company = new Paragraph(COMPANY, font(8.5f, true, INK)); company.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(company);
         Paragraph tagline = new Paragraph(TAGLINE, MUTED_FONT); tagline.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(tagline);
         Paragraph address = new Paragraph(ADDRESS, MUTED_FONT); address.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(address);
         header.addCell(companyCell);
@@ -127,6 +128,7 @@ public class PayslipPdfService {
         addField(summary, "Bank Account Number", e.getBankAccountNumber());
         addField(summary, "UAN Number", e.getUanNumber());
         addField(summary, "PAN Number", e.getPanNumber());
+        PdfPCell finalColumn = new PdfPCell(); finalColumn.setBorder(Rectangle.NO_BORDER); summary.addCell(finalColumn);
         PdfPCell left = new PdfPCell(summary); left.setBorderColor(LINE); left.setPadding(7); outer.addCell(left);
         PdfPTable metrics = new PdfPTable(1); metrics.setWidthPercentage(100);
         metric(metrics, "Paid Days", data.path("paidDays").asText("-"));
@@ -145,14 +147,18 @@ public class PayslipPdfService {
         addAmount(earnings, "Basic", value(data, "basic"));
         addAmount(earnings, "House Rent Allowance", value(data, "hra"));
         addAmount(earnings, "Leave Travel Allowance", value(data, "lta"));
-        addAmount(earnings, "Fixed Allowance", value(data, "fixedAllowance"));
+        addAmount(earnings, "Special Allowance", value(data, "fixedAllowance"));
+        if (data.path("performanceBonusEnabled").asBoolean(false))
+            addAmount(earnings, "Performance Bonus", value(data, "performanceBonus"));
         addAmount(deductions, "EPF Contribution", value(data, "employeePf"));
-        addAmount(deductions, "ESI Contribution", value(data, "employeeEsi"));
+        BigDecimal employeeEsi = value(data, "employeeEsi");
+        if (employeeEsi.signum() > 0) addAmount(deductions, "ESI Contribution", employeeEsi);
         addAmount(deductions, "Professional Tax", value(data, "professionalTax"));
-        addAmount(deductions, "TDS", value(data, "tds"));
+        BigDecimal tds = value(data, "tds");
+        if (tds.signum() > 0) addAmount(deductions, "TDS", tds);
         addTotal(earnings, "Gross Earnings", value(data, "gross"));
-        BigDecimal totalDeductions = value(data, "employeePf").add(value(data, "employeeEsi"))
-                .add(value(data, "professionalTax")).add(value(data, "tds"));
+        BigDecimal totalDeductions = value(data, "employeePf").add(employeeEsi)
+                .add(value(data, "professionalTax")).add(tds);
         addTotal(deductions, "Total Deductions", totalDeductions);
         PdfPCell left = new PdfPCell(earnings); left.setBorder(Rectangle.NO_BORDER); left.setPaddingRight(10); columns.addCell(left);
         PdfPCell right = new PdfPCell(deductions); right.setBorder(Rectangle.NO_BORDER); right.setPaddingLeft(10); columns.addCell(right);
@@ -227,3 +233,4 @@ public class PayslipPdfService {
 
     public record PayslipDocument(byte[] bytes, String filename, String recipientEmail, String employeeName) { }
 }
+
