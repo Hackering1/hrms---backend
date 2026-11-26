@@ -17,7 +17,7 @@ import java.util.Base64;
 /**
  * Sends transactional emails for the HR portal via the Microsoft Graph API
  * (app-only / client-credentials auth), using the "TechNext HRMS Mailer"
- * Azure AD App Registration and the hr@technnext.com mailbox.
+ * Azure AD App Registration and the configured HR / Accounts Payable mailboxes.
  *
  * IMPORTANT reliability rule: sendEmployeeWelcomeEmail/sendEmployeeInviteEmail
  * are NOT allowed to throw. A Graph/Azure AD outage, an expired secret, or a
@@ -49,6 +49,10 @@ public class EmailService {
     // the app registration's Mail.Send application permission.
     @Value("${app.mail.from}")
     private String fromMailbox;
+
+    // Payslips are sent from Accounts Payable; Graph must be authorized for this mailbox.
+    @Value("${app.mail.payslip-from:ap@technnext.com}")
+    private String payslipFromMailbox;
 
     @Value("${app.company.name}")
     private String companyName;
@@ -107,6 +111,14 @@ public class EmailService {
     private void sendViaGraph(String toEmail, String subject, String htmlBody,
                                byte[] attachmentBytes, String attachmentFilename,
                                byte[] inlineImageBytes, String inlineImageFilename, String contentId) throws Exception {
+        sendViaGraph(toEmail, subject, htmlBody, attachmentBytes, attachmentFilename,
+                inlineImageBytes, inlineImageFilename, contentId, fromMailbox);
+    }
+
+    private void sendViaGraph(String toEmail, String subject, String htmlBody,
+                               byte[] attachmentBytes, String attachmentFilename,
+                               byte[] inlineImageBytes, String inlineImageFilename, String contentId,
+                               String senderMailbox) throws Exception {
         String accessToken = graphTokenService.getAccessToken();
 
         ObjectNode emailAddress = objectMapper.createObjectNode();
@@ -150,7 +162,7 @@ public class EmailService {
         payload.set("message", message);
         payload.put("saveToSentItems", true);
 
-        String requestUrl = String.format(GRAPH_SEND_MAIL_URL_TEMPLATE, fromMailbox);
+        String requestUrl = String.format(GRAPH_SEND_MAIL_URL_TEMPLATE, senderMailbox);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(requestUrl))
@@ -208,7 +220,7 @@ public class EmailService {
         if (toEmail == null || toEmail.isBlank()) throw new IllegalArgumentException("Recipient email is required.");
         try (var logo = new ClassPathResource("letter-logo.jpg").getInputStream()) {
             sendViaGraph(toEmail, subject, htmlBody, pdfBytes, pdfFilename,
-                    logo.readAllBytes(), "technext-logo.jpg", "technext-logo");
+                    logo.readAllBytes(), "technext-logo.jpg", "technext-logo", payslipFromMailbox);
             log.info("[EmailService] Payslip email sent to {}", toEmail);
         } catch (Exception ex) {
             log.error("[EmailService] Failed to send payslip email to {}: {}", toEmail, ex.getMessage(), ex);
