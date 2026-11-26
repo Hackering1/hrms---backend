@@ -6,13 +6,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
 import java.util.Base64;
+import java.util.Locale;
 
 /**
  * Sends transactional emails for the HR portal via the Microsoft Graph API
@@ -50,11 +57,13 @@ public class EmailService {
     @Value("${app.mail.from}")
     private String fromMailbox;
 
-    // Formatted employee letters are issued by HR even when other mail flows use a different sender.
+    // Employee letters are issued by HR even when other mail flows use a
+    // different configured sender.
     @Value("${app.mail.letter-from:hr@technnext.com}")
     private String letterFromMailbox;
 
-    // Payslips are sent from Accounts Payable; Graph must be authorized for this mailbox.
+    // Payslips are sent from Accounts Payable; this must be a mailbox the
+    // Microsoft Graph application is authorized to send as.
     @Value("${app.mail.payslip-from:ap@technnext.com}")
     private String payslipFromMailbox;
 
@@ -195,6 +204,26 @@ public class EmailService {
         }
     }
 
+    private boolean isHrSender(String senderMailbox) {
+        return senderMailbox != null && (senderMailbox.equalsIgnoreCase(fromMailbox)
+                || senderMailbox.equalsIgnoreCase(letterFromMailbox));
+    }
+
+    private String appendHrSignature(String htmlBody) {
+        String footer = "<div style=\"margin-top:24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2937;\">"
+                + "<p style=\"margin:0 0 8px;\">Best Regards,<br/>HR Team</p>"
+                + "<img src=\"cid:technext-hr-logo\" alt=\"TechNext logo\" "
+                + "style=\"display:block;width:140px;height:auto;margin:8px 0;\"/>"
+                + "<div>TechNext Technologies And Services Pvt Ltd</div>"
+                + "<div>Email: <a href=\"mailto:hr@technnext.com\">hr@technnext.com</a></div>"
+                + "</div>";
+        String body = htmlBody == null ? "" : htmlBody;
+        int outerClose = body.toLowerCase().lastIndexOf("</div>");
+        return outerClose >= 0
+                ? body.substring(0, outerClose) + footer + body.substring(outerClose)
+                : body + footer;
+    }
+
     /**
      * Sends a generated letter PDF to the given recipient.
      *
@@ -242,24 +271,92 @@ public class EmailService {
         }
     }
 
-    private boolean isHrSender(String senderMailbox) {
-        return senderMailbox != null && (senderMailbox.equalsIgnoreCase(fromMailbox)
-                || senderMailbox.equalsIgnoreCase(letterFromMailbox));
+    public void sendMissedCheckInReminder(String employeeName, String toEmail, LocalDate date) {
+        String displayDate = date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
+        String body = emailWrapper("<p>Dear " + escape(employeeName) + ",</p>"
+                + "<p>This is a reminder that HRMS has not recorded your attendance check-in for "
+                + "<strong>" + displayDate + "</strong> as of 9:45 AM.</p>"
+                + "<p>If you are working today, please sign in to HRMS and complete your check-in. "
+                + "If you believe this reminder is incorrect or you are facing a technical issue, please contact HR.</p>");
+        queueHrNotification(toEmail, "Attendance check-in reminder - " + displayDate, body);
     }
 
-    private String appendHrSignature(String htmlBody) {
-        String footer = "<div style=\"margin-top:24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2937;\">"
-                + "<p style=\"margin:0 0 8px;\">Best Regards,<br/>HR Team</p>"
-                + "<img src=\"cid:technext-hr-logo\" alt=\"TechNext logo\" "
-                + "style=\"display:block;width:140px;height:auto;margin:8px 0;\"/>"
-                + "<div>TechNext Technologies And Services Pvt Ltd</div>"
-                + "<div>Email: <a href=\"mailto:hr@technnext.com\">hr@technnext.com</a></div>"
-                + "</div>";
-        String body = htmlBody == null ? "" : htmlBody;
-        int outerClose = body.toLowerCase().lastIndexOf("</div>");
-        return outerClose >= 0
-                ? body.substring(0, outerClose) + footer + body.substring(outerClose)
-                : body + footer;
+    public void sendAttendanceRegularizationStatus(String employeeName, String toEmail,
+            LocalDate attendanceDate, LocalTime requestedIn, LocalTime requestedOut,
+            String reason, String status, String reviewerRemarks) {
+        String displayDate = attendanceDate.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
+        String body = emailWrapper("<p>Dear " + escape(employeeName) + ",</p>"
+                + "<p>Your attendance regularization request for <strong>" + displayDate
+                + "</strong> has a status of <strong>" + escape(status) + "</strong>.</p>"
+                + "<p><strong>Requested check-in:</strong> " + escape(formatTime(requestedIn)) + "<br/>"
+                + "<strong>Requested check-out:</strong> " + escape(formatTime(requestedOut)) + "<br/>"
+                + "<strong>Reason:</strong> " + escape(reason) + "</p>"
+                + statusRemarks(reviewerRemarks));
+        queueHrNotification(toEmail, "Attendance regularization " + status.toLowerCase(Locale.ROOT)
+                + " - " + displayDate, body);
+    }
+
+    public void sendLeaveRequestStatus(String employeeName, String toEmail, String leaveType,
+            LocalDate fromDate, LocalDate toDate, BigDecimal numberOfDays,
+            String status, String reason, String approverRemarks) {
+        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd MMMM yyyy");
+        String displayRange = fromDate.equals(toDate)
+                ? fromDate.format(dateFormat)
+                : fromDate.format(dateFormat) + " to " + toDate.format(dateFormat);
+        String body = emailWrapper("<p>Dear " + escape(employeeName) + ",</p>"
+                + "<p>Your <strong>" + escape(leaveType) + "</strong> leave request for <strong>"
+                + displayRange + "</strong> has a status of <strong>" + escape(status) + "</strong>.</p>"
+                + "<p><strong>Days:</strong> " + escape(numberOfDays == null ? "" : numberOfDays.stripTrailingZeros().toPlainString())
+                + "<br/><strong>Reason:</strong> " + escape(reason) + "</p>"
+                + statusRemarks(approverRemarks));
+        queueHrNotification(toEmail, "Leave request " + status.toLowerCase(Locale.ROOT)
+                + " - " + escapeSubject(leaveType), body);
+    }
+
+    private void queueHrNotification(String toEmail, String subject, String htmlBody) {
+        Runnable send = () -> {
+            if (!mailEnabled) {
+                log.info("[EmailService] HR notification email is disabled; skipping email to {}", toEmail);
+                return;
+            }
+            if (toEmail == null || toEmail.isBlank()) {
+                log.warn("[EmailService] HR notification has no recipient; skipping.");
+                return;
+            }
+            try {
+                sendViaGraph(toEmail, subject, htmlBody, null, null,
+                        null, null, null, letterFromMailbox);
+                log.info("[EmailService] HR notification sent to {}", toEmail);
+            } catch (Exception ex) {
+                log.error("[EmailService] Failed to send HR notification to {}: {}", toEmail, ex.getMessage(), ex);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { send.run(); }
+            });
+        } else {
+            send.run();
+        }
+    }
+
+    private String emailWrapper(String content) {
+        return "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937;line-height:1.6;\">"
+                + content + "</div>";
+    }
+
+    private String statusRemarks(String remarks) {
+        return remarks == null || remarks.isBlank() ? ""
+                : "<p><strong>Reviewer remarks:</strong> " + escape(remarks) + "</p>";
+    }
+
+    private String formatTime(LocalTime value) {
+        return value == null ? "Not specified" : value.format(DateTimeFormatter.ofPattern("hh:mm a"));
+    }
+
+    private String escapeSubject(String value) {
+        return value == null ? "Leave request" : value.replaceAll("[\\r\\n]", " ");
     }
 
     private String buildHtmlBody(EmployeeWelcomeEmailEvent event) {
@@ -299,7 +396,6 @@ public class EmailService {
         sb.append("<p>Please quote your Employee ID in all communication with HR. " +
                 "Note that your Employee ID cannot be changed by you — only an HR administrator can update it.</p>");
         sb.append("<p>If you have any questions, please reach out to your HR administrator.</p>");
-
         sb.append("</div>");
         return sb.toString();
     }
@@ -346,7 +442,6 @@ public class EmailService {
                 .append("Complete Registration</a></p>");
         sb.append("<p style=\"color:#6b7280;font-size:13px;\">The invitation expires in 24 hours. " +
                 "Your Employee ID is ").append(escape(event.employeeCode())).append(".</p>");
-
         sb.append("</div>");
         return sb.toString();
     }
