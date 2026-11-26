@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -100,6 +101,12 @@ public class EmailService {
      */
     private void sendViaGraph(String toEmail, String subject, String htmlBody,
                                byte[] attachmentBytes, String attachmentFilename) throws Exception {
+        sendViaGraph(toEmail, subject, htmlBody, attachmentBytes, attachmentFilename, null, null, null);
+    }
+
+    private void sendViaGraph(String toEmail, String subject, String htmlBody,
+                               byte[] attachmentBytes, String attachmentFilename,
+                               byte[] inlineImageBytes, String inlineImageFilename, String contentId) throws Exception {
         String accessToken = graphTokenService.getAccessToken();
 
         ObjectNode emailAddress = objectMapper.createObjectNode();
@@ -125,6 +132,18 @@ public class EmailService {
             attachment.put("contentBytes", Base64.getEncoder().encodeToString(attachmentBytes));
             message.put("hasAttachments", true);
             message.putArray("attachments").add(attachment);
+        }
+        if (inlineImageBytes != null && inlineImageBytes.length > 0) {
+            ObjectNode imageAttachment = objectMapper.createObjectNode();
+            imageAttachment.put("@odata.type", "#microsoft.graph.fileAttachment");
+            imageAttachment.put("name", inlineImageFilename == null || inlineImageFilename.isBlank()
+                    ? "technext-logo.jpg" : inlineImageFilename);
+            imageAttachment.put("contentType", "image/jpeg");
+            imageAttachment.put("contentBytes", Base64.getEncoder().encodeToString(inlineImageBytes));
+            imageAttachment.put("isInline", true);
+            imageAttachment.put("contentId", contentId == null || contentId.isBlank() ? "technext-logo" : contentId);
+            message.put("hasAttachments", true);
+            message.withArray("attachments").add(imageAttachment);
         }
 
         ObjectNode payload = objectMapper.createObjectNode();
@@ -176,6 +195,24 @@ public class EmailService {
         } catch (Exception ex) {
             log.error("[EmailService] Failed to send letter email to {}: {}", toEmail, ex.getMessage(), ex);
             throw new IllegalStateException("Failed to send letter email.", ex);
+        }
+    }
+
+    /** Sends a payslip with the company logo embedded in the email signature. */
+    public void sendPayslipEmail(String toEmail, String subject, String htmlBody,
+                                  byte[] pdfBytes, String pdfFilename) {
+        if (!mailEnabled) {
+            throw new IllegalStateException(
+                    "Email sending is currently disabled for this environment (app.mail.enabled=false).");
+        }
+        if (toEmail == null || toEmail.isBlank()) throw new IllegalArgumentException("Recipient email is required.");
+        try (var logo = new ClassPathResource("letter-logo.jpg").getInputStream()) {
+            sendViaGraph(toEmail, subject, htmlBody, pdfBytes, pdfFilename,
+                    logo.readAllBytes(), "technext-logo.jpg", "technext-logo");
+            log.info("[EmailService] Payslip email sent to {}", toEmail);
+        } catch (Exception ex) {
+            log.error("[EmailService] Failed to send payslip email to {}: {}", toEmail, ex.getMessage(), ex);
+            throw new IllegalStateException("Failed to send payslip email.", ex);
         }
     }
 
@@ -288,3 +325,4 @@ public class EmailService {
                 .replace("\"", "&quot;");
     }
 }
+
