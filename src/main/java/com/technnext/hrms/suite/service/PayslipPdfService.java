@@ -117,7 +117,7 @@ public class PayslipPdfService {
     }
 
     private void addEmployeeSummary(Document document, Employee e, SuiteRecord payroll, JsonNode data) throws DocumentException {
-        PdfPTable outer = new PdfPTable(new float[]{66, 34}); outer.setWidthPercentage(100); outer.setSpacingAfter(12);
+        PdfPTable outer = new PdfPTable(new float[]{60, 6, 34}); outer.setWidthPercentage(100); outer.setSpacingAfter(12);
         PdfPTable summary = new PdfPTable(new float[]{50, 50}); summary.setWidthPercentage(100);
         PdfPCell title = cell("Employee Summary", BOLD); title.setColspan(2); title.setPadding(8); title.setBorder(Rectangle.NO_BORDER); summary.addCell(title);
         addField(summary, "Employee Name", fullName(e)); addField(summary, "Employee ID", e.getEmployeeCode());
@@ -132,11 +132,12 @@ public class PayslipPdfService {
         addField(summary, "PAN Number", e.getPanNumber());
         PdfPCell finalColumn = new PdfPCell(); finalColumn.setBorder(Rectangle.NO_BORDER); summary.addCell(finalColumn);
         PdfPCell left = new PdfPCell(summary); left.setBorderColor(LINE); left.setBorderWidth(0.8f); left.setPadding(7); outer.addCell(left);
+        PdfPCell spacer = new PdfPCell(); spacer.setBorder(Rectangle.NO_BORDER); outer.addCell(spacer);
         PdfPTable metrics = new PdfPTable(1); metrics.setWidthPercentage(100);
         metric(metrics, "Paid Days", data.path("paidDays").asText("-"));
         metric(metrics, "LOP Days", data.path("lopDays").asText("-"));
         metric(metrics, "Total Net Pay", rupees(value(data, "netPay")));
-        PdfPCell right = new PdfPCell(metrics); right.setBorderColor(GREEN); right.setBorderWidth(1.5f); right.setBackgroundColor(SOFT_GREEN); right.setPadding(7); outer.addCell(right);
+        PdfPCell right = new PdfPCell(metrics); right.setBorder(Rectangle.NO_BORDER); right.setCellEvent(new RoundedCard(GREEN, SOFT_GREEN, 1.5f, 9f)); right.setPadding(7); outer.addCell(right);
         document.add(outer);
     }
 
@@ -189,7 +190,7 @@ public class PayslipPdfService {
         c.addElement(new Paragraph(label, MUTED_FONT)); c.addElement(new Paragraph(orDash(value), NORMAL)); table.addCell(c);
     }
     private void metric(PdfPTable table, String label, String value) {
-        PdfPCell c = new PdfPCell(); c.setBorder(Rectangle.BOTTOM); c.setBorderColor(GREEN_DIVIDER); c.setBackgroundColor(SOFT_GREEN); c.setPadding(8);
+        PdfPCell c = new PdfPCell(); c.setBorder(Rectangle.BOTTOM); c.setBorderColor(GREEN_DIVIDER); c.setPadding(8);
         Paragraph a = new Paragraph(label, font(9, true, GREEN)); a.setAlignment(Element.ALIGN_CENTER); c.addElement(a);
         Paragraph b = new Paragraph(value, "Total Net Pay".equals(label) ? BIG : font(17, true, INK)); b.setAlignment(Element.ALIGN_CENTER); c.addElement(b); table.addCell(c);
     }
@@ -205,6 +206,37 @@ public class PayslipPdfService {
     private void addTotal(PdfPTable table, String label, BigDecimal amount) {
         PdfPCell a = cell(label, BOLD); a.setBorder(Rectangle.TOP); a.setBorderColor(LINE); a.setPadding(7); table.addCell(a);
         PdfPCell b = cell(rupees(amount), BOLD); b.setHorizontalAlignment(Element.ALIGN_RIGHT); b.setBorder(Rectangle.TOP); b.setBorderColor(LINE); b.setPadding(7); table.addCell(b);
+    }
+    private static final class RoundedCard implements PdfPCellEvent {
+        private final Color borderColor;
+        private final Color fillColor;
+        private final float borderWidth;
+        private final float radius;
+
+        private RoundedCard(Color borderColor, Color fillColor, float borderWidth, float radius) {
+            this.borderColor = borderColor;
+            this.fillColor = fillColor;
+            this.borderWidth = borderWidth;
+            this.radius = radius;
+        }
+
+        @Override
+        public void cellLayout(PdfPCell cell, Rectangle position, PdfContentByte[] canvases) {
+            PdfContentByte background = canvases[PdfPTable.BACKGROUNDCANVAS];
+            background.saveState();
+            background.setColorFill(fillColor);
+            background.roundRectangle(position.getLeft(), position.getBottom(), position.getWidth(), position.getHeight(), radius);
+            background.fill();
+            background.restoreState();
+
+            PdfContentByte lines = canvases[PdfPTable.LINECANVAS];
+            lines.saveState();
+            lines.setColorStroke(borderColor);
+            lines.setLineWidth(borderWidth);
+            lines.roundRectangle(position.getLeft(), position.getBottom(), position.getWidth(), position.getHeight(), radius);
+            lines.stroke();
+            lines.restoreState();
+        }
     }
     private static PdfPCell cell(String value, Font font) { PdfPCell c = new PdfPCell(new Phrase(orDash(value), font)); c.setBorderColor(LINE); return c; }
     private static String fullName(Employee e) { return String.join(" ", List.of(e.getFirstName(), e.getMiddleName() == null ? "" : e.getMiddleName(), e.getLastName())).replaceAll("\\s+", " ").trim(); }
