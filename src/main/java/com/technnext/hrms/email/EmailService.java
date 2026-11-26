@@ -6,13 +6,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
 import java.util.Base64;
+import java.util.Locale;
 
 /**
  * Sends transactional emails for the HR portal via the Microsoft Graph API
@@ -240,6 +247,94 @@ public class EmailService {
             log.error("[EmailService] Failed to send payslip email to {}: {}", toEmail, ex.getMessage(), ex);
             throw new IllegalStateException("Failed to send payslip email.", ex);
         }
+    }
+
+    public void sendMissedCheckInReminder(String employeeName, String toEmail, LocalDate date) {
+        String displayDate = date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
+        String body = emailWrapper("<p>Dear " + escape(employeeName) + ",</p>"
+                + "<p>This is a reminder that HRMS has not recorded your attendance check-in for "
+                + "<strong>" + displayDate + "</strong> as of 9:45 AM.</p>"
+                + "<p>If you are working today, please sign in to HRMS and complete your check-in. "
+                + "If you believe this reminder is incorrect or you are facing a technical issue, please contact HR.</p>");
+        queueHrNotification(toEmail, "Attendance check-in reminder - " + displayDate, body);
+    }
+
+    public void sendAttendanceRegularizationStatus(String employeeName, String toEmail,
+            LocalDate attendanceDate, LocalTime requestedIn, LocalTime requestedOut,
+            String reason, String status, String reviewerRemarks) {
+        String displayDate = attendanceDate.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
+        String body = emailWrapper("<p>Dear " + escape(employeeName) + ",</p>"
+                + "<p>Your attendance regularization request for <strong>" + displayDate
+                + "</strong> has a status of <strong>" + escape(status) + "</strong>.</p>"
+                + "<p><strong>Requested check-in:</strong> " + escape(formatTime(requestedIn)) + "<br/>"
+                + "<strong>Requested check-out:</strong> " + escape(formatTime(requestedOut)) + "<br/>"
+                + "<strong>Reason:</strong> " + escape(reason) + "</p>"
+                + statusRemarks(reviewerRemarks));
+        queueHrNotification(toEmail, "Attendance regularization " + status.toLowerCase(Locale.ROOT)
+                + " - " + displayDate, body);
+    }
+
+    public void sendLeaveRequestStatus(String employeeName, String toEmail, String leaveType,
+            LocalDate fromDate, LocalDate toDate, BigDecimal numberOfDays,
+            String status, String reason, String approverRemarks) {
+        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd MMMM yyyy");
+        String displayRange = fromDate.equals(toDate)
+                ? fromDate.format(dateFormat)
+                : fromDate.format(dateFormat) + " to " + toDate.format(dateFormat);
+        String body = emailWrapper("<p>Dear " + escape(employeeName) + ",</p>"
+                + "<p>Your <strong>" + escape(leaveType) + "</strong> leave request for <strong>"
+                + displayRange + "</strong> has a status of <strong>" + escape(status) + "</strong>.</p>"
+                + "<p><strong>Days:</strong> " + escape(numberOfDays == null ? "" : numberOfDays.stripTrailingZeros().toPlainString())
+                + "<br/><strong>Reason:</strong> " + escape(reason) + "</p>"
+                + statusRemarks(approverRemarks));
+        queueHrNotification(toEmail, "Leave request " + status.toLowerCase(Locale.ROOT)
+                + " - " + escapeSubject(leaveType), body);
+    }
+
+    private void queueHrNotification(String toEmail, String subject, String htmlBody) {
+        Runnable send = () -> {
+            if (!mailEnabled) {
+                log.info("[EmailService] HR notification email is disabled; skipping email to {}", toEmail);
+                return;
+            }
+            if (toEmail == null || toEmail.isBlank()) {
+                log.warn("[EmailService] HR notification has no recipient; skipping.");
+                return;
+            }
+            try {
+                sendViaGraph(toEmail, subject, htmlBody, null, null,
+                        null, null, null, letterFromMailbox);
+                log.info("[EmailService] HR notification sent to {}", toEmail);
+            } catch (Exception ex) {
+                log.error("[EmailService] Failed to send HR notification to {}: {}", toEmail, ex.getMessage(), ex);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { send.run(); }
+            });
+        } else {
+            send.run();
+        }
+    }
+
+    private String emailWrapper(String content) {
+        return "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937;line-height:1.6;\">"
+                + content + "</div>";
+    }
+
+    private String statusRemarks(String remarks) {
+        return remarks == null || remarks.isBlank() ? ""
+                : "<p><strong>Reviewer remarks:</strong> " + escape(remarks) + "</p>";
+    }
+
+    private String formatTime(LocalTime value) {
+        return value == null ? "Not specified" : value.format(DateTimeFormatter.ofPattern("hh:mm a"));
+    }
+
+    private String escapeSubject(String value) {
+        return value == null ? "Leave request" : value.replaceAll("[\\r\\n]", " ");
     }
 
     private boolean isHrSender(String senderMailbox) {

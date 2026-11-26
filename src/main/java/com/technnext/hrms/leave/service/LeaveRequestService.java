@@ -2,6 +2,9 @@ package com.technnext.hrms.leave.service;
 
 import com.technnext.hrms.common.exception.BadRequestException;
 import com.technnext.hrms.common.exception.ResourceNotFoundException;
+import com.technnext.hrms.email.EmailService;
+import com.technnext.hrms.employee.entity.Employee;
+import com.technnext.hrms.employee.repository.EmployeeRepository;
 import com.technnext.hrms.leave.dto.LeaveApproval;
 import com.technnext.hrms.leave.dto.LeaveRegularizeRequest;
 import com.technnext.hrms.leave.dto.LeaveRequestCreate;
@@ -10,6 +13,7 @@ import com.technnext.hrms.leave.entity.LeaveBalance;
 import com.technnext.hrms.leave.entity.LeaveRequest;
 import com.technnext.hrms.leave.repository.LeaveBalanceRepository;
 import com.technnext.hrms.leave.repository.LeaveRequestRepository;
+import com.technnext.hrms.leave.repository.LeaveTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +29,9 @@ public class LeaveRequestService {
     private final LeaveRequestRepository requestRepository;
     private final LeaveBalanceRepository balanceRepository;
     private final LeaveDaysCalculator daysCalculator;
+    private final EmployeeRepository employeeRepository;
+    private final LeaveTypeRepository leaveTypeRepository;
+    private final EmailService emailService;
 
     public List<LeaveRequestResponse> getAll() {
         return requestRepository.findAll().stream().map(LeaveRequestResponse::from).toList();
@@ -119,6 +126,7 @@ public class LeaveRequestService {
             bal.setPendingDays(nz(bal.getPendingDays()).add(days));
             balanceRepository.save(bal);
         }
+        emailEmployeeOfStatus(r);
         return LeaveRequestResponse.from(r);
     }
 
@@ -296,6 +304,24 @@ public class LeaveRequestService {
 
     private BigDecimal nz(BigDecimal v) {
         return v != null ? v : BigDecimal.ZERO;
+    }
+
+    private void emailEmployeeOfStatus(LeaveRequest request) {
+        try {
+            Employee employee = employeeRepository.findById(request.getEmployeeId()).orElse(null);
+            if (employee == null || employee.getEmail() == null || employee.getEmail().isBlank()) return;
+            String name = ((employee.getFirstName() == null ? "" : employee.getFirstName()) + " "
+                    + (employee.getMiddleName() == null ? "" : employee.getMiddleName()) + " "
+                    + (employee.getLastName() == null ? "" : employee.getLastName()))
+                    .replaceAll("\\s+", " ").trim();
+            String leaveType = leaveTypeRepository.findById(request.getLeaveTypeId())
+                    .map(type -> type.getName()).orElse("Leave");
+            emailService.sendLeaveRequestStatus(name, employee.getEmail(), leaveType,
+                    request.getFromDate(), request.getToDate(), request.getNumberOfDays(),
+                    request.getStatus(), request.getReason(), request.getApproverRemarks());
+        } catch (Exception ex) {
+            // Email delivery is a notification side effect and never rolls back leave changes.
+        }
     }
 
     private LeaveBalance currentYearBalance(UUID employeeId, Integer leaveTypeId) {
