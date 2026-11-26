@@ -33,7 +33,7 @@ public interface SuiteRecordRepository extends JpaRepository<SuiteRecord, UUID> 
                                                               @Param("period") String period);
     @Modifying
     @Transactional
-    @Query("update SuiteRecord r set r.status = 'EMAIL_SENDING' where r.id = :id and r.module = 'payroll' and r.archivedAt is null and r.status in ('CALCULATED', 'EMAIL_FAILED')")
+    @Query("update SuiteRecord r set r.status = 'EMAIL_SENDING' where r.id = :id and r.module = 'payroll' and r.archivedAt is null and r.status in ('CALCULATED', 'EMAIL_FAILED', 'APPROVED')")
     int claimPayrollEmail(@Param("id") UUID id);
     boolean existsByModuleAndEmployeeIdAndStatus(String module, UUID employeeId, String status);
 }
