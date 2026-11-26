@@ -64,9 +64,9 @@ public class PayrollRunService {
             BigDecimal gross = basic.add(hra).add(lta).add(allowance).add(performanceBonus)
                     .setScale(2, RoundingMode.HALF_UP);
             BigDecimal employeePf = percent(basic, profile.getPfRate());
-            BigDecimal employeeEsi = percent(gross, profile.getEsiRate());
+            BigDecimal employeeEsi = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
             BigDecimal professionalTax = prorate(profile.getProfessionalTax(), factor);
-            BigDecimal tds = prorate(profile.getTds(), factor);
+            BigDecimal tds = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
             BigDecimal net = gross.subtract(employeePf).subtract(employeeEsi).subtract(professionalTax).subtract(tds).setScale(2, RoundingMode.HALF_UP);
             if (net.signum() < 0) throw new BadRequestException("Deductions cannot exceed gross salary.");
             BigDecimal employerPf = percent(basic, profile.getEmployerPfRate());
