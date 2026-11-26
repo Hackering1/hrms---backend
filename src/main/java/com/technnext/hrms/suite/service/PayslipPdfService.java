@@ -77,7 +77,7 @@ public class PayslipPdfService {
             PdfPCell words = cell("Amount In Words:   " + amountInWords(value(data, "netPay")), NORMAL);
             words.setPadding(12); words.setBorderColor(LINE); footer.addCell(words);
             document.add(footer);
-            Paragraph note = new Paragraph("This is a system-generated document.", MUTED_FONT);
+            Paragraph note = new Paragraph("Note: This is a system generated payslip and does not require authentication.", MUTED_FONT);
             note.setAlignment(Element.ALIGN_CENTER); note.setSpacingBefore(14); document.add(note);
             document.close();
             String employeeName = fullName(employee);
@@ -145,6 +145,8 @@ public class PayslipPdfService {
         addSectionHeader(earnings, "Earnings"); addSectionHeader(deductions, "Deductions");
         addTableHead(earnings); addTableHead(deductions);
         addAmount(earnings, "Basic", value(data, "basic"));
+        if (value(data, "dearnessAllowance").signum() > 0)
+            addAmount(earnings, "Dearness Allowance", value(data, "dearnessAllowance"));
         addAmount(earnings, "House Rent Allowance", value(data, "hra"));
         addAmount(earnings, "Leave Travel Allowance", value(data, "lta"));
         addAmount(earnings, "Special Allowance", value(data, "fixedAllowance"));
