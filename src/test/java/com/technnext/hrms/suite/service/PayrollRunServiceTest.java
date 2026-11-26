@@ -14,6 +14,7 @@ import com.technnext.hrms.suite.entity.PayrollProfile;
 import com.technnext.hrms.suite.entity.SuiteRecord;
 import com.technnext.hrms.suite.repository.PayrollProfileRepository;
 import com.technnext.hrms.suite.repository.SuiteRecordRepository;
+import com.technnext.hrms.employee.repository.EmployeeRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -51,7 +52,7 @@ class PayrollRunServiceTest {
                 .thenReturn(false);
         when(records.save(any(SuiteRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PayrollRunService service = new PayrollRunService(records, profiles);
+        PayrollRunService service = new PayrollRunService(records, profiles, Mockito.mock(EmployeeRepository.class));
         List<SuiteRecord> result = service.calculateAndGenerate(
                 new PayrollRunRequest("2026-10", List.of(new PayrollRunEmployeeInput(employeeId, 31, 0))), actorId);
 
@@ -99,7 +100,7 @@ class PayrollRunServiceTest {
         when(records.existsByModuleAndEmployeeIdAndPeriod("payroll", employeeId, "2026-10")).thenReturn(false);
         when(records.save(any(SuiteRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<SuiteRecord> result = new PayrollRunService(records, profiles).calculateAndGenerate(
+        List<SuiteRecord> result = new PayrollRunService(records, profiles, Mockito.mock(EmployeeRepository.class)).calculateAndGenerate(
                 new PayrollRunRequest("2026-10", List.of(new PayrollRunEmployeeInput(employeeId, 31, 0))), UUID.randomUUID());
 
         assertEquals(new BigDecimal("56800.00"), result.get(0).getAmount());
