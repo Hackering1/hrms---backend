@@ -12,6 +12,7 @@ import com.technnext.hrms.suite.repository.SuiteRecordRepository;
 import com.technnext.hrms.suite.dto.PayrollRunRequest;
 import com.technnext.hrms.suite.dto.TimesheetGenerateRequest;
 import com.technnext.hrms.suite.service.PayrollRunService;
+import com.technnext.hrms.suite.service.PayrollArchiveService;
 import com.technnext.hrms.suite.service.TimesheetService;
 import com.technnext.hrms.suite.entity.PayrollProfile;
 import com.technnext.hrms.suite.dto.PayrollProfileRequest;
@@ -48,6 +49,7 @@ public class SuiteController {
     private final EmployeeRepository employees;
     private final CurrentUserService currentUser;
     private final PayrollRunService payrollRunService;
+    private final PayrollArchiveService payrollArchiveService;
     private final TimesheetService timesheetService;
     private final PayrollProfileRepository payrollProfiles;
     private final PayslipPdfService payslipPdfService;
@@ -82,6 +84,7 @@ public class SuiteController {
         requirePayrollAccess(user);
         SuiteRecord payroll = repository.findByIdAndModule(id, "payroll")
                 .orElseThrow(() -> new ResourceNotFoundException("Payroll record", id));
+        if (payroll.getArchivedAt() != null) throw new BadRequestException("Restore this archived payroll before approving or emailing it.");
         if (!Set.of("CALCULATED", "EMAIL_FAILED").contains(payroll.getStatus()))
             throw new BadRequestException("Only calculated payroll can be approved and emailed. Current status: " + payroll.getStatus());
         if (repository.claimPayrollEmail(id) != 1)
@@ -119,6 +122,7 @@ public class SuiteController {
         requirePayrollAccess(user);
         SuiteRecord payroll = repository.findByIdAndModule(id, "payroll")
                 .orElseThrow(() -> new ResourceNotFoundException("Payroll record", id));
+        if (payroll.getArchivedAt() != null) throw new BadRequestException("Restore this archived payroll before downloading its payslip.");
         PayslipDocument document = payslipPdfService.generate(payroll);
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + document.filename() + "\"")
@@ -128,6 +132,21 @@ public class SuiteController {
     private void requirePayrollAccess(CustomUserDetails user) {
         if (!currentUser.canManagePayroll(user))
             throw new AccessDeniedException("Payroll and payslip access is restricted to administrators and finance.");
+    }
+
+    @PostMapping("/payroll/{id}/archive")
+    public ApiResponse<SuiteRecord> archivePayroll(@PathVariable UUID id,
+                                                    @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        return ApiResponse.ok("Payroll and its payslip were archived. Both remain in the audit history and can be restored.",
+                payrollArchiveService.archive(id, user.getUser().getId()));
+    }
+
+    @PostMapping("/payroll/{id}/restore")
+    public ApiResponse<SuiteRecord> restorePayroll(@PathVariable UUID id,
+                                                    @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        return ApiResponse.ok("Payroll and its payslip were restored.", payrollArchiveService.restore(id, user.getUser().getId()));
     }
 
     private String escapeHtml(String value) {
@@ -207,11 +226,18 @@ public class SuiteController {
     }
 
     @GetMapping("/{module}")
-    public ApiResponse<List<SuiteRecord>> list(@PathVariable String module, @AuthenticationPrincipal CustomUserDetails user) {
+    public ApiResponse<List<SuiteRecord>> list(@PathVariable String module,
+                                                @RequestParam(defaultValue = "false") boolean includeArchived,
+                                                @AuthenticationPrincipal CustomUserDetails user) {
         checkModule(module);
         if (Set.of("payroll", "payslips", "statutory").contains(module) && !currentUser.canManagePayroll(user))
             throw new AccessDeniedException("Payroll and payslip records are restricted to administrators and finance.");
-        if (isPrivilegedFinance(module, user)) return ApiResponse.ok(withEmployeeLabels(repository.findByModuleOrderByCreatedAtDesc(module)));
+        if (isPrivilegedFinance(module, user)) {
+            List<SuiteRecord> records = includeArchived
+                    ? repository.findByModuleOrderByCreatedAtDesc(module)
+                    : repository.findByModuleAndArchivedAtIsNullOrderByCreatedAtDesc(module);
+            return ApiResponse.ok(withEmployeeLabels(records));
+        }
         if (module.equals("time-tracking")) {
             UUID own = currentUser.ownEmployeeIdOrEmpty(user).orElseThrow(() -> new BadRequestException("No employee profile is linked to your account."));
             return ApiResponse.ok(withEmployeeLabels(repository.findByModuleAndEmployeeIdOrderByCreatedAtDesc(module, own)));
@@ -357,3 +383,4 @@ public class SuiteController {
         if (!MODULES.contains(module)) throw new ResourceNotFoundException("HR suite module", module);
     }
 }
+

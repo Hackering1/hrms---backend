@@ -65,6 +65,14 @@ public class SuiteRecord {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /** Reversible archival metadata; payroll rows are retained for audit. */
+    @Column(name = "archived_at")
+    private LocalDateTime archivedAt;
+
+    @Column(name = "archived_by")
+    private UUID archivedBy;
+
     @PrePersist protected void onCreate() { createdAt = LocalDateTime.now(); updatedAt = createdAt; }
     @PreUpdate protected void onUpdate() { updatedAt = LocalDateTime.now(); }
 }
+
