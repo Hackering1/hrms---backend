@@ -25,6 +25,12 @@ public class SuiteRecord {
     @Column(nullable = false, length = 180)
     private String title;
 
+    @Column(name = "category_key", length = 64)
+    private String category;
+
+    @Column(name = "priority_key", length = 16)
+    private String priority;
+
     @Column(name = "employee_id")
     private UUID employeeId;
 
@@ -71,6 +77,18 @@ public class SuiteRecord {
 
     @Column(name = "archived_by")
     private UUID archivedBy;
+
+    @Column(name = "reviewed_by")
+    private UUID reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "reviewer_remarks", columnDefinition = "text")
+    private String reviewerRemarks;
+
+    @Column(name = "consent_policy_version", length = 64)
+    private String consentPolicyVersion;
 
     @PrePersist protected void onCreate() { createdAt = LocalDateTime.now(); updatedAt = createdAt; }
     @PreUpdate protected void onUpdate() { updatedAt = LocalDateTime.now(); }
