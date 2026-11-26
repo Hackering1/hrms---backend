@@ -232,9 +232,7 @@ public class LetterPdfController {
                     + escapeHtml(role == null ? "employee" : role)
                     + "</strong>, with the effective date stated in the attached letter.</p>"
                     + "<p>Please find your Confirmation Letter attached for your records. All other terms and conditions in your appointment letter remain unchanged.</p>"
-                    + "<p>We look forward to your continued contributions and wish you a rewarding career with us.</p>"
-                    + "<p>Regards,<br/>HR Team<br/>" + escapeHtml(COMPANY_NAME)
-                    + "<br/><a href=\"mailto:hr@technnext.com\">hr@technnext.com</a></p>";
+                    + "<p>We look forward to your continued contributions and wish you a rewarding career with us.</p>";
             return new EmailCopy(subject, body);
         }
         String subjectPrefix;
@@ -257,8 +255,7 @@ public class LetterPdfController {
                 // original behavior, byte-for-byte.
                 String oldSubject = label + " - " + name;
                 String oldBody = "<p>Dear " + escapeHtml(name) + ",</p>"
-                        + "<p>Please find attached your " + escapeHtml(label) + ".</p>"
-                        + "<p>Regards,<br/>HR Team<br/>TechNext Technologies and Services Pvt Ltd</p>";
+                        + "<p>Please find attached your " + escapeHtml(label) + ".</p>";
                 return new EmailCopy(oldSubject, oldBody);
         }
 
@@ -282,8 +279,7 @@ public class LetterPdfController {
                 + "<p>Should you have any questions or require any further clarification, please feel free "
                 + "to reach out to us.</p>"
                 + "<p>We look forward to welcoming you to the TechNext team and wish you a successful "
-                + "journey with us.</p>"
-                + "<p>Warm regards,<br/>Thanks,<br/>HR</p>";
+                + "journey with us.</p>";
 
         return new EmailCopy(subject, body);
     }
