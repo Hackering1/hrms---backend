@@ -36,6 +36,12 @@ public class PayrollProfile {
     private BigDecimal employerEsiRate;
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal gratuity;
+    @Builder.Default
+    @Column(name = "performance_bonus_enabled", nullable = false)
+    private Boolean performanceBonusEnabled = false;
+    @Builder.Default
+    @Column(name = "performance_bonus", nullable = false, precision = 14, scale = 2)
+    private BigDecimal performanceBonus = BigDecimal.ZERO;
     @Column(length = 80)
     private String policyVersion;
     @Column(name = "updated_by", nullable = false)
@@ -45,3 +51,4 @@ public class PayrollProfile {
 
     @PrePersist @PreUpdate protected void onChange() { updatedAt = LocalDateTime.now(); }
 }
+
