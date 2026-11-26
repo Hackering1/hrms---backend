@@ -13,6 +13,7 @@ import com.technnext.hrms.suite.dto.PayrollRunRequest;
 import com.technnext.hrms.suite.dto.TimesheetGenerateRequest;
 import com.technnext.hrms.suite.service.PayrollRunService;
 import com.technnext.hrms.suite.service.PayrollArchiveService;
+import com.technnext.hrms.suite.service.PayrollDeletionService;
 import com.technnext.hrms.suite.service.TimesheetService;
 import com.technnext.hrms.suite.entity.PayrollProfile;
 import com.technnext.hrms.suite.dto.PayrollProfileRequest;
@@ -54,6 +55,7 @@ public class SuiteController {
     private final CurrentUserService currentUser;
     private final PayrollRunService payrollRunService;
     private final PayrollArchiveService payrollArchiveService;
+    private final PayrollDeletionService payrollDeletionService;
     private final TimesheetService timesheetService;
     private final PayrollProfileRepository payrollProfiles;
     private final PayslipPdfService payslipPdfService;
@@ -145,6 +147,22 @@ public class SuiteController {
                 .body(document.bytes());
     }
 
+    @GetMapping("/payslips/{id}/pdf")
+    public ResponseEntity<byte[]> downloadPayslipFromHistory(@PathVariable UUID id,
+                                                              @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        SuiteRecord payslip = repository.findByIdAndModule(id, "payslips")
+                .orElseThrow(() -> new ResourceNotFoundException("Payslip", id));
+        if (payslip.getArchivedAt() != null)
+            throw new BadRequestException("Restore this archived payslip before downloading it.");
+        SuiteRecord payroll = repository.findByModuleAndEmployeeIdAndPeriod("payroll", payslip.getEmployeeId(), payslip.getPeriod())
+                .orElseThrow(() -> new ResourceNotFoundException("Payroll record", payslip.getPeriod()));
+        PayslipDocument document = payslipPdfService.generate(payroll);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + document.filename() + "\"")
+                .body(document.bytes());
+    }
+
     private void requirePayrollAccess(CustomUserDetails user) {
         if (!currentUser.canManagePayroll(user))
             throw new AccessDeniedException("Payroll and payslip access is restricted to administrators and finance.");
@@ -165,6 +183,14 @@ public class SuiteController {
         return ApiResponse.ok("Payroll and its payslip were restored.", payrollArchiveService.restore(id, user.getUser().getId()));
     }
 
+    @DeleteMapping("/payroll/{id}")
+    public ApiResponse<Void> deletePayroll(@PathVariable UUID id,
+                                           @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        payrollDeletionService.deletePayroll(id, user.getUser().getId());
+        return ApiResponse.ok("Payroll and payslip permanently deleted; the deletion audit record was retained.", null);
+    }
+
     @PostMapping("/payslips/{id}/resend-email")
     public ApiResponse<SuiteRecord> resendPayslipFromHistory(@PathVariable UUID id,
                                                               @AuthenticationPrincipal CustomUserDetails user) {
@@ -175,6 +201,18 @@ public class SuiteController {
         SuiteRecord payroll = repository.findByModuleAndEmployeeIdAndPeriod("payroll", payslip.getEmployeeId(), payslip.getPeriod())
                 .orElseThrow(() -> new ResourceNotFoundException("Payroll record", payslip.getPeriod()));
         return approveAndEmailPayslip(payroll.getId(), user);
+    }
+
+    @DeleteMapping("/payslips/{id}")
+    public ApiResponse<Void> deletePayslipFromHistory(@PathVariable UUID id,
+                                                       @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        SuiteRecord payslip = repository.findByIdAndModule(id, "payslips")
+                .orElseThrow(() -> new ResourceNotFoundException("Payslip", id));
+        SuiteRecord payroll = repository.findByModuleAndEmployeeIdAndPeriod("payroll", payslip.getEmployeeId(), payslip.getPeriod())
+                .orElseThrow(() -> new ResourceNotFoundException("Payroll record", payslip.getPeriod()));
+        payrollDeletionService.deletePayroll(payroll.getId(), user.getUser().getId());
+        return ApiResponse.ok("Payroll and payslip permanently deleted; the deletion audit record was retained.", null);
     }
 
     @PostMapping("/payslips/{id}/archive")
@@ -260,6 +298,16 @@ public class SuiteController {
         profile.setTaxNpsAnnual(zero(request.taxNpsAnnual()));
         profile.setPolicyVersion(request.policyVersion()); profile.setUpdatedBy(user.getUser().getId());
         return ApiResponse.ok("Payroll profile saved", payrollProfiles.save(profile));
+    }
+
+    @DeleteMapping("/payroll/profiles/{employeeId}")
+    public ApiResponse<Void> deletePayrollProfile(@PathVariable UUID employeeId,
+                                                   @AuthenticationPrincipal CustomUserDetails user) {
+        requireHr(user);
+        if (!payrollProfiles.existsById(employeeId))
+            throw new ResourceNotFoundException("Payroll profile", employeeId);
+        payrollProfiles.deleteById(employeeId);
+        return ApiResponse.ok("Payroll profile and saved tax declarations were deleted. Existing payroll history is unchanged.", null);
     }
 
     private void requireHr(CustomUserDetails user) {
