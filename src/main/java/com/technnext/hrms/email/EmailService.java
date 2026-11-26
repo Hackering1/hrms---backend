@@ -123,6 +123,15 @@ public class EmailService {
                                byte[] attachmentBytes, String attachmentFilename,
                                byte[] inlineImageBytes, String inlineImageFilename, String contentId,
                                String senderMailbox) throws Exception {
+        if (isHrSender(senderMailbox)) {
+            htmlBody = appendHrSignature(htmlBody);
+            try (var logo = new ClassPathResource("letter-logo.jpg").getInputStream()) {
+                inlineImageBytes = logo.readAllBytes();
+            }
+            inlineImageFilename = "technext-hr-logo.jpg";
+            contentId = "technext-hr-logo";
+        }
+
         String accessToken = graphTokenService.getAccessToken();
 
         ObjectNode emailAddress = objectMapper.createObjectNode();
@@ -233,6 +242,26 @@ public class EmailService {
         }
     }
 
+    private boolean isHrSender(String senderMailbox) {
+        return senderMailbox != null && (senderMailbox.equalsIgnoreCase(fromMailbox)
+                || senderMailbox.equalsIgnoreCase(letterFromMailbox));
+    }
+
+    private String appendHrSignature(String htmlBody) {
+        String footer = "<div style=\"margin-top:24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2937;\">"
+                + "<p style=\"margin:0 0 8px;\">Best Regards,<br/>HR Team</p>"
+                + "<img src=\"cid:technext-hr-logo\" alt=\"TechNext logo\" "
+                + "style=\"display:block;width:140px;height:auto;margin:8px 0;\"/>"
+                + "<div>TechNext Technologies And Services Pvt Ltd</div>"
+                + "<div>Email: <a href=\"mailto:hr@technnext.com\">hr@technnext.com</a></div>"
+                + "</div>";
+        String body = htmlBody == null ? "" : htmlBody;
+        int outerClose = body.toLowerCase().lastIndexOf("</div>");
+        return outerClose >= 0
+                ? body.substring(0, outerClose) + footer + body.substring(outerClose)
+                : body + footer;
+    }
+
     private String buildHtmlBody(EmployeeWelcomeEmailEvent event) {
         String fullName = (safe(event.firstName()) + " " + safe(event.lastName())).trim();
         StringBuilder sb = new StringBuilder();
@@ -270,8 +299,7 @@ public class EmailService {
         sb.append("<p>Please quote your Employee ID in all communication with HR. " +
                 "Note that your Employee ID cannot be changed by you — only an HR administrator can update it.</p>");
         sb.append("<p>If you have any questions, please reach out to your HR administrator.</p>");
-        sb.append("<p style=\"margin-top:24px;color:#6b7280;font-size:13px;\">— ")
-                .append(escape(companyName)).append(" HR Team</p>");
+
         sb.append("</div>");
         return sb.toString();
     }
@@ -318,8 +346,7 @@ public class EmailService {
                 .append("Complete Registration</a></p>");
         sb.append("<p style=\"color:#6b7280;font-size:13px;\">The invitation expires in 24 hours. " +
                 "Your Employee ID is ").append(escape(event.employeeCode())).append(".</p>");
-        sb.append("<p style=\"margin-top:24px;color:#6b7280;font-size:13px;\">— ")
-                .append(escape(companyName)).append(" HR Team</p>");
+
         sb.append("</div>");
         return sb.toString();
     }
