@@ -10,6 +10,7 @@ import com.technnext.hrms.common.exception.BadRequestException;
 import com.technnext.hrms.common.exception.ResourceNotFoundException;
 import com.technnext.hrms.employee.entity.Employee;
 import com.technnext.hrms.employee.repository.EmployeeRepository;
+import com.technnext.hrms.email.EmailService;
 import com.technnext.hrms.notification.dto.NotificationCreate;
 import com.technnext.hrms.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class RegularizationService {
     private final AttendanceRepository attendanceRepository;
     private final EmployeeRepository employeeRepository;
     private final NotificationService notificationService;
+    private final EmailService emailService;
 
     // ─── Queries ───────────────────────────────────────────────────────────────
 
@@ -109,6 +111,7 @@ public class RegularizationService {
 
         // FIX 4: notify the employee's direct manager (if any) via the notification system
         notifyManagerOfNewRequest(reg);
+        emailEmployeeOfStatus(reg);
 
         return reg;
     }
@@ -154,6 +157,7 @@ public class RegularizationService {
 
         // FIX 4: notify the employee
         notifyEmployeeOfDecision(reg);
+        emailEmployeeOfStatus(reg);
 
         return reg;
     }
@@ -294,6 +298,22 @@ public class RegularizationService {
         }
     }
 
+    private void emailEmployeeOfStatus(AttendanceRegularization reg) {
+        try {
+            Employee employee = employeeRepository.findById(reg.getEmployeeId()).orElse(null);
+            if (employee == null || employee.getEmail() == null || employee.getEmail().isBlank()) return;
+            String name = ((employee.getFirstName() == null ? "" : employee.getFirstName()) + " "
+                    + (employee.getMiddleName() == null ? "" : employee.getMiddleName()) + " "
+                    + (employee.getLastName() == null ? "" : employee.getLastName()))
+                    .replaceAll("\\s+", " ").trim();
+            emailService.sendAttendanceRegularizationStatus(name, employee.getEmail(),
+                    reg.getAttendanceDate(), reg.getRequestedIn(), reg.getRequestedOut(),
+                    reg.getReason(), reg.getStatus(), reg.getReviewerRemarks());
+        } catch (Exception ex) {
+            // Email delivery is a notification side effect and never rolls back attendance changes.
+        }
+    }
+
     private String employeeName(UUID employeeId) {
         return employeeRepository.findById(employeeId)
                 .map(e -> (e.getFirstName() != null ? e.getFirstName() : "")
@@ -301,3 +321,4 @@ public class RegularizationService {
                 .orElse("Employee");
     }
 }
+
