@@ -36,6 +36,9 @@ import java.util.HashMap;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /** Role- and employee-scoped API shared by payroll, time, work, performance and
  * asset workstreams. Computer monitoring is intentionally consent-led and stores
@@ -85,10 +88,11 @@ public class SuiteController {
         SuiteRecord payroll = repository.findByIdAndModule(id, "payroll")
                 .orElseThrow(() -> new ResourceNotFoundException("Payroll record", id));
         if (payroll.getArchivedAt() != null) throw new BadRequestException("Restore this archived payroll before approving or emailing it.");
-        if (!Set.of("CALCULATED", "EMAIL_FAILED").contains(payroll.getStatus()))
-            throw new BadRequestException("Only calculated payroll can be approved and emailed. Current status: " + payroll.getStatus());
+        if (!Set.of("CALCULATED", "EMAIL_FAILED", "APPROVED").contains(payroll.getStatus()))
+            throw new BadRequestException("Only calculated or previously approved payroll can be emailed. Current status: " + payroll.getStatus());
+        boolean resend = "APPROVED".equals(payroll.getStatus());
         if (repository.claimPayrollEmail(id) != 1)
-            throw new BadRequestException("This payslip is already being sent or has already been approved.");
+            throw new BadRequestException("This payslip is already being sent or cannot be sent in its current status.");
         payroll.setStatus("EMAIL_SENDING");
         SuiteRecord payslip = null;
         try {
@@ -97,14 +101,25 @@ public class SuiteController {
             repository.save(payroll);
             payslip.setStatus("EMAIL_SENDING"); repository.save(payslip);
             PayslipDocument document = payslipPdfService.generate(payroll);
-            String body = "<div style=\"font-family:Arial,sans-serif;color:#1f2937\"><p>Dear "
-                    + escapeHtml(document.employeeName()) + ",</p><p>Your payslip for "
-                    + escapeHtml(payroll.getPeriod()) + " is attached.</p><p>Regards,<br>TechNext Payroll</p></div>";
-            emailService.sendLetterEmail(document.recipientEmail(), "Payslip for " + payroll.getPeriod(), body,
+            String displayPeriod = YearMonth.parse(payroll.getPeriod())
+                    .format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH));
+            String body = "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:680px;line-height:1.55\">"
+                    + "<p>Dear " + escapeHtml(document.employeeName()) + ",</p>"
+                    + "<p>Greetings from TechNext Technologies and Services Private Limited.</p>"
+                    + "<p>Please find attached your Payslip for the Month of " + escapeHtml(displayPeriod)
+                    + " for your reference and records.</p>"
+                    + "<p>Kindly review the details mentioned in the payslip. Should you have any questions or notice any discrepancies regarding your salary, deductions, or payroll-related information, please contact the Accounts Payable Team.</p>"
+                    + "<p>We sincerely appreciate your dedication, hard work, and valuable contributions to the organization. Thank you for being an integral part of our continued success.</p>"
+                    + "<p>Best Regards,<br>Accounts Payable Team<br>"
+                    + "<img src=\"cid:technext-logo\" alt=\"TechNext logo\" style=\"display:block;max-width:180px;max-height:60px;margin:8px 0\">"
+                    + "TechNext Technologies And Services Pvt Ltd<br>Email: <a href=\"mailto:ap@technnext.com\">ap@technnext.com</a></p></div>";
+            emailService.sendPayslipEmail(document.recipientEmail(), "Payslip for " + displayPeriod, body,
                     document.bytes(), document.filename());
             payroll.setStatus("APPROVED"); payslip.setStatus("EMAILED");
             repository.save(payroll); repository.save(payslip);
-            return ApiResponse.ok("Payroll approved and payslip emailed to the employee's recorded email.", payroll);
+            return ApiResponse.ok(resend
+                    ? "Payslip email sent again to the employee's recorded email."
+                    : "Payroll approved and payslip emailed to the employee's recorded email.", payroll);
         } catch (Exception ex) {
             payroll.setStatus("EMAIL_FAILED");
             repository.save(payroll);
@@ -185,6 +200,8 @@ public class SuiteController {
         profile.setPfRate(request.pfRate()); profile.setEsiRate(request.esiRate()); profile.setProfessionalTax(request.professionalTax());
         profile.setTds(request.tds()); profile.setEmployerPfRate(request.employerPfRate());
         profile.setEmployerEsiRate(request.employerEsiRate()); profile.setGratuity(request.gratuity());
+        profile.setPerformanceBonusEnabled(Boolean.TRUE.equals(request.performanceBonusEnabled()));
+        profile.setPerformanceBonus(request.performanceBonus() == null ? java.math.BigDecimal.ZERO : request.performanceBonus());
         profile.setPolicyVersion(request.policyVersion()); profile.setUpdatedBy(user.getUser().getId());
         return ApiResponse.ok("Payroll profile saved", payrollProfiles.save(profile));
     }
