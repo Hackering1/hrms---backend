@@ -26,19 +26,19 @@ public class LetterTemplateController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<LetterTemplate> create(@RequestBody LetterTemplate body) {
         return ApiResponse.ok("Template created", service.create(body));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<LetterTemplate> update(@PathVariable Integer id, @RequestBody LetterTemplate body) {
         return ApiResponse.ok("Template updated", service.update(id, body));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

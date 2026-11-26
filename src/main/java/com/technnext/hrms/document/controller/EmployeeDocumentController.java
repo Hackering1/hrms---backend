@@ -33,7 +33,7 @@ public class EmployeeDocumentController {
     }
 
     @GetMapping("/expiring")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<List<EmployeeDocument>> getExpiring(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate before) {
         return ApiResponse.ok(service.getExpiringBefore(before));
@@ -60,7 +60,7 @@ public class EmployeeDocumentController {
      * re-checked here so a manager can only delete within their scope.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(
             @PathVariable Integer id,
             @AuthenticationPrincipal CustomUserDetails principal) {

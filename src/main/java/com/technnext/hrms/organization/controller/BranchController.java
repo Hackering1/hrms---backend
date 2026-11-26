@@ -29,19 +29,19 @@ public class BranchController {
 
     // Master data: Super Admin + Manager (your confirmed rule).
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Branch> create(@Valid @RequestBody Branch body) {
         return ApiResponse.ok("Created", service.create(body));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Branch> update(@PathVariable Integer id, @Valid @RequestBody Branch body) {
         return ApiResponse.ok("Updated", service.update(id, body));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

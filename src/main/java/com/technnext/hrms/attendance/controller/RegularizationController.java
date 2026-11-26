@@ -46,7 +46,7 @@ public class RegularizationController {
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<List<AttendanceRegularization>> getPending(
             @AuthenticationPrincipal CustomUserDetails principal) {
         if (currentUser.isSuperAdmin(principal)) {
@@ -81,7 +81,7 @@ public class RegularizationController {
     }
 
     @PutMapping("/{id}/decision")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<AttendanceRegularization> decide(
             @PathVariable Integer id,
             @RequestBody RegularizationDecision body,
@@ -114,7 +114,7 @@ public class RegularizationController {
      * CANCELLED and is available to the requesting employee themselves.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<Void> deletePermanent(@PathVariable Integer id) {
         service.deletePermanent(id);
         return ApiResponse.ok("Request deleted", null);

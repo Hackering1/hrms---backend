@@ -111,7 +111,7 @@ public class NotificationController {
      * be able to do to any other user. Restricted to privileged roles.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<Notification> create(@RequestBody NotificationCreate body) {
         return ApiResponse.ok("Notification created", service.create(body));
     }
@@ -181,6 +181,7 @@ public class NotificationController {
                 .anyMatch(a -> {
                     String auth = a.getAuthority();
                     return auth.equals("ROLE_SUPER_ADMIN")
+                            || auth.equals("ROLE_FINANCE_ADMIN")
                             || auth.equals("ROLE_HR_ADMIN")
                             || auth.equals("ROLE_HR_EXECUTIVE")
                             || auth.equals("ROLE_MANAGER");

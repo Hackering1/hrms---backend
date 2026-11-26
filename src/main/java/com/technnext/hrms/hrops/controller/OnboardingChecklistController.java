@@ -30,20 +30,20 @@ public class OnboardingChecklistController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<OnboardingChecklist> create(@RequestBody OnboardingChecklist body) {
         return ApiResponse.ok("Task added", service.create(body));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<OnboardingChecklist> update(@PathVariable Integer id, @RequestBody OnboardingChecklist body) {
         return ApiResponse.ok("Task updated", service.update(id, body));
     }
 
     /** Mark a task complete/incomplete. A MANAGER may only do this for their own team. */
     @PutMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<OnboardingChecklist> complete(
             @PathVariable Integer id,
             @RequestBody CompleteTaskRequest body,
@@ -53,7 +53,7 @@ public class OnboardingChecklistController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

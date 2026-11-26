@@ -37,7 +37,7 @@ public class ManagerService {
      * too, not just MANAGER/HR logins.
      */
     private static final Set<String> MANAGER_ROLE_NAMES =
-            Set.of("MANAGER", "HR_ADMIN", "HR_EXECUTIVE", "SUPER_ADMIN");
+            Set.of("MANAGER", "HR_ADMIN", "HR_EXECUTIVE", "SUPER_ADMIN", "FINANCE_ADMIN");
 
     // ── Team queries ─────────────────────────────────────────────────────────────
 

@@ -12,14 +12,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Super-Admin-only. Managers and Employees must never reach these endpoints —
+ * HRMS-admin-only. Managers and Employees must never reach these endpoints —
  * enforced both here (@PreAuthorize) and in the frontend (nav hidden + RoleRoute
  * guard), matching the existing defense-in-depth pattern used elsewhere.
  */
 @RestController
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE_ADMIN')")
 public class EmployeeInviteController {
 
     private final EmployeeInviteService inviteService;

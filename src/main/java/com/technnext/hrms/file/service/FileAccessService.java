@@ -23,7 +23,7 @@ import java.util.UUID;
  * and checking the caller's access to the employee it belongs to.
  *
  * Policy (proportionate to sensitivity):
- *   - SUPER_ADMIN: anything.
+ *   - organization admins (including Finance Admin): anything.
  *   - Profile photos: any signed-in user (avatars are shown across the app;
  *     they are org-internal, low-sensitivity, and blocking them breaks the UI).
  *   - The uploader: whatever they uploaded.
@@ -43,7 +43,7 @@ public class FileAccessService {
 
     public boolean canDownload(StoredFile file, CustomUserDetails principal) {
         if (principal == null) return false;
-        if (currentUser.isSuperAdmin(principal)) return true;
+        if (currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)) return true;
 
         UUID fileId = file.getId();
         String idStr = fileId.toString();

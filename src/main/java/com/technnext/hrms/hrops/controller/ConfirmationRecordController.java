@@ -21,7 +21,7 @@ public class ConfirmationRecordController {
     private final CurrentUserService currentUser;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<List<ConfirmationRecord>> getAll() {
         return ApiResponse.ok(service.getAll());
     }
@@ -35,13 +35,13 @@ public class ConfirmationRecordController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<ConfirmationRecord> create(@RequestBody ConfirmationRecord body) {
         return ApiResponse.ok("Confirmation recorded", service.create(body));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

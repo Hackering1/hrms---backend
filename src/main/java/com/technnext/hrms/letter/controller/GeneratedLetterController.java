@@ -23,7 +23,7 @@ public class GeneratedLetterController {
     private final CurrentUserService currentUser;
 
     @GetMapping("/employee/{employeeId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<List<GeneratedLetter>> getByEmployee(
             @PathVariable UUID employeeId,
             @AuthenticationPrincipal CustomUserDetails principal) {
@@ -32,7 +32,7 @@ public class GeneratedLetterController {
     }
 
     @GetMapping("/preview")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<LetterPreview> preview(
             @RequestParam Integer templateId, @RequestParam UUID employeeId,
             @AuthenticationPrincipal CustomUserDetails principal) {
@@ -41,13 +41,13 @@ public class GeneratedLetterController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<GeneratedLetter> generate(@RequestBody GenerateLetterRequest body) {
         return ApiResponse.ok("Letter generated", service.generate(body));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);

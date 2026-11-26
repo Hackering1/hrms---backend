@@ -22,7 +22,7 @@ public class ProbationTrackingController {
     private final CurrentUserService currentUser;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<List<ProbationTracking>> getAll() {
         return ApiResponse.ok(service.getAll());
     }
@@ -36,14 +36,14 @@ public class ProbationTrackingController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ApiResponse<ProbationTracking> create(@RequestBody ProbationTracking body) {
         return ApiResponse.ok("Probation created", service.create(body));
     }
 
     /** Review a probation record. A MANAGER may only do this for their own team. */
     @PutMapping("/{id}/review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','MANAGER','FINANCE_ADMIN')")
     public ApiResponse<ProbationTracking> review(
             @PathVariable Integer id,
             @RequestBody ProbationReview body,
@@ -54,7 +54,7 @@ public class ProbationTrackingController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','FINANCE_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Integer id) {
         service.delete(id);
         return ApiResponse.ok("Deleted", null);
