@@ -11,6 +11,7 @@ import com.technnext.hrms.suite.entity.SuiteRecord;
 import com.technnext.hrms.suite.repository.SuiteRecordRepository;
 import com.technnext.hrms.suite.dto.PayrollRunRequest;
 import com.technnext.hrms.suite.dto.TimesheetGenerateRequest;
+import com.technnext.hrms.suite.dto.TimesheetDecisionRequest;
 import com.technnext.hrms.suite.service.PayrollRunService;
 import com.technnext.hrms.suite.service.PayrollArchiveService;
 import com.technnext.hrms.suite.service.PayrollDeletionService;
@@ -255,6 +256,30 @@ public class SuiteController {
         return ApiResponse.ok("Timesheet generated from completed time-tracker sessions", timesheet);
     }
 
+    @PostMapping("/timesheets/{id}/decision")
+    public ApiResponse<SuiteRecord> decideTimesheet(@PathVariable UUID id,
+            @Valid @RequestBody TimesheetDecisionRequest request,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        if (!currentUser.isManager(user) && !currentUser.isAdmin(user) && !currentUser.isSuperAdmin(user))
+            throw new AccessDeniedException("Timesheet approvals are restricted to managers and HR administrators.");
+        SuiteRecord timesheet = repository.findByIdAndModule(id, "timesheets")
+                .orElseThrow(() -> new ResourceNotFoundException("Timesheet", id));
+        assertCanAccess(timesheet, user);
+        if (!Set.of("SUBMITTED", "PENDING").contains(timesheet.getStatus()))
+            throw new BadRequestException("Only a submitted timesheet can be approved or rejected.");
+        String nextStatus = request.status().trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("APPROVED", "REJECTED").contains(nextStatus))
+            throw new BadRequestException("Timesheet decision must be APPROVED or REJECTED.");
+        if ("REJECTED".equals(nextStatus) && (request.remarks() == null || request.remarks().isBlank()))
+            throw new BadRequestException("Please provide a reason when rejecting a timesheet.");
+        timesheet.setStatus(nextStatus);
+        timesheet.setReviewedBy(user.getUser().getId());
+        timesheet.setReviewedAt(LocalDateTime.now());
+        timesheet.setReviewerRemarks(request.remarks());
+        return ApiResponse.ok("Timesheet " + nextStatus.toLowerCase(Locale.ROOT) + ".", repository.save(timesheet));
+    }
+
+
     @GetMapping("/payroll/profiles")
     public ApiResponse<List<PayrollProfile>> payrollProfiles(@AuthenticationPrincipal CustomUserDetails user) {
         requireHr(user);
@@ -326,6 +351,7 @@ public class SuiteController {
         if (repository.existsByModuleAndEmployeeIdAndStatus("time-tracking", employeeId, "RUNNING"))
             throw new BadRequestException("Stop your current timer before starting another.");
         SuiteRecord record = SuiteRecord.builder().module("time-tracking").title(title)
+                .category(cleanOptional(body.get("category")))
                 .employeeId(employeeId).status("RUNNING").startDate(LocalDate.now())
                 .createdBy(user.getUser().getId()).build();
         return ApiResponse.ok("Timer started", repository.save(record));
@@ -346,6 +372,65 @@ public class SuiteController {
         record.setEndDate(stoppedAt.toLocalDate());
         record.setStatus("STOPPED");
         return ApiResponse.ok("Timer stopped", repository.save(record));
+    }
+
+    @PostMapping("/monitoring/start")
+    public ApiResponse<SuiteRecord> startConsentBasedWorkSession(@RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        if (!Boolean.TRUE.equals(body.get("consent")))
+            throw new BadRequestException("Explicit consent is required before recording a computer-use work session.");
+        String title = body.get("title") instanceof String value ? value.trim() : "";
+        if (title.isBlank() || title.length() > 180)
+            throw new BadRequestException("Enter an activity name (maximum 180 characters).");
+        UUID employeeId = currentUser.ownEmployeeId(user);
+        if (repository.existsByModuleAndEmployeeIdAndStatus("monitoring", employeeId, "RUNNING"))
+            throw new BadRequestException("Stop your current work session before starting another.");
+        String category = body.get("category") instanceof String value ? cleanOptional(value) : null;
+        SuiteRecord session = SuiteRecord.builder().module("monitoring").title(title).category(category)
+                .employeeId(employeeId).status("RUNNING").startDate(LocalDate.now())
+                .consent(true).consentPolicyVersion("HRMS-COMPUTER-USE-V1")
+                .details("Tracks only the employee-started session duration and activity label.")
+                .createdBy(user.getUser().getId()).build();
+        return ApiResponse.ok("Consent-based work session started", repository.save(session));
+    }
+
+    @PostMapping("/monitoring/{id}/stop")
+    public ApiResponse<SuiteRecord> stopConsentBasedWorkSession(@PathVariable UUID id,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        SuiteRecord session = repository.findByIdAndModule(id, "monitoring")
+                .orElseThrow(() -> new ResourceNotFoundException("Computer-use session", id));
+        UUID own = currentUser.ownEmployeeIdOrEmpty(user).orElse(null);
+        if (own == null || !own.equals(session.getEmployeeId()))
+            throw new AccessDeniedException("Only the employee who started this session can stop it.");
+        if (!"RUNNING".equals(session.getStatus()) || !Boolean.TRUE.equals(session.getConsent()))
+            throw new BadRequestException("This consent-based session is no longer running.");
+        LocalDateTime stoppedAt = LocalDateTime.now();
+        session.setMinutes((int) Math.max(0, Duration.between(session.getCreatedAt(), stoppedAt).toMinutes()));
+        session.setEndDate(stoppedAt.toLocalDate());
+        session.setStatus("STOPPED");
+        return ApiResponse.ok("Work session stopped", repository.save(session));
+    }
+
+    @PostMapping("/monitoring/consent/withdraw")
+    public ApiResponse<Integer> withdrawComputerUseConsent(@AuthenticationPrincipal CustomUserDetails user) {
+        UUID employeeId = currentUser.ownEmployeeId(user);
+        List<SuiteRecord> activeSessions = repository
+                .findByModuleAndEmployeeIdOrderByCreatedAtDesc("monitoring", employeeId).stream()
+                .filter(session -> "RUNNING".equals(session.getStatus()))
+                .toList();
+        activeSessions.forEach(session -> {
+            session.setConsent(false);
+            session.setMinutes(null);
+            session.setStatus("CONSENT_WITHDRAWN");
+        });
+        repository.saveAll(activeSessions);
+        return ApiResponse.ok("Consent withdrawn. Active work sessions were stopped.", activeSessions.size());
+    }
+
+    @GetMapping("/monitoring/my-sessions")
+    public ApiResponse<List<SuiteRecord>> myComputerUseSessions(@AuthenticationPrincipal CustomUserDetails user) {
+        UUID employeeId = currentUser.ownEmployeeId(user);
+        return ApiResponse.ok(repository.findByModuleAndEmployeeIdOrderByCreatedAtDesc("monitoring", employeeId));
     }
 
     @GetMapping("/{module}")
@@ -394,6 +479,8 @@ public class SuiteController {
         UUID employeeId = targetEmployee(module, body.employeeId(), user);
         if (module.equals("monitoring") && !Boolean.TRUE.equals(body.consent()))
             throw new BadRequestException("Explicit employee consent is required before tracking work sessions.");
+        if (module.equals("monitoring"))
+            throw new BadRequestException("Start computer-use sessions with the consent-controlled session action.");
         SuiteRecord record = toRecord(module, body, employeeId, user);
         record.setStatus(workflowStatus(module, body.status(), user));
         return ApiResponse.ok("Record created", repository.save(record));
@@ -407,8 +494,12 @@ public class SuiteController {
         SuiteRecord record = repository.findByIdAndModule(id, module).orElseThrow(() -> new ResourceNotFoundException("HR suite record", id));
         assertCanAccess(record, user);
         requireWritePermission(module, user);
+        if (module.equals("monitoring"))
+            throw new BadRequestException("Use the consent withdrawal action; computer-use sessions cannot be edited directly.");
         UUID employeeId = targetEmployee(module, body.employeeId(), user);
         record.setTitle(body.title().trim());
+        record.setCategory(cleanOptional(body.category()));
+        record.setPriority(normalizePriority(body.priority()));
         record.setEmployeeId(employeeId);
         record.setStatus(workflowStatus(module, body.status(), user));
         record.setPeriod(body.period()); record.setAmount(body.amount()); record.setMinutes(body.minutes());
@@ -425,6 +516,7 @@ public class SuiteController {
 
     private SuiteRecord toRecord(String module, SuiteRecordRequest body, UUID employeeId, CustomUserDetails user) {
         return SuiteRecord.builder().module(module).title(body.title().trim()).employeeId(employeeId)
+                .category(cleanOptional(body.category())).priority(normalizePriority(body.priority()))
                 .status(normalizeStatus(body.status())).period(body.period()).amount(body.amount()).minutes(body.minutes())
                 .startDate(body.startDate()).endDate(body.endDate()).details(body.details())
                 .consent(Boolean.TRUE.equals(body.consent())).createdBy(user.getUser().getId()).build();
@@ -496,9 +588,34 @@ public class SuiteController {
         return value;
     }
 
+    private String cleanOptional(String value) {
+        if (value == null || value.isBlank()) return null;
+        String cleaned = value.trim();
+        if (cleaned.length() > 64) throw new BadRequestException("Category is too long.");
+        return cleaned;
+    }
+
+    private String normalizePriority(String priority) {
+        if (priority == null || priority.isBlank()) return null;
+        String value = priority.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("LOW", "MEDIUM", "HIGH", "URGENT").contains(value))
+            throw new BadRequestException("Priority must be LOW, MEDIUM, HIGH, or URGENT.");
+        return value;
+    }
+
     private String workflowStatus(String module, String status, CustomUserDetails user) {
         String value = normalizeStatus(status);
-        if (module.equals("timesheets") && !currentUser.isManager(user) && !currentUser.isSuperAdmin(user)
+        if (module.equals("tasks") && !Set.of("OPEN", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED").contains(value))
+            throw new BadRequestException("Task status must be OPEN, IN_PROGRESS, BLOCKED, DONE, or CANCELLED.");
+        if (module.equals("assets") && !Set.of("AVAILABLE", "ASSIGNED", "IN_REPAIR", "RETURNED", "RETIRED").contains(value))
+            throw new BadRequestException("Asset status must be AVAILABLE, ASSIGNED, IN_REPAIR, RETURNED, or RETIRED.");
+        if (module.equals("statutory") && !Set.of("DRAFT", "READY_TO_FILE", "FILED", "PAID", "OVERDUE").contains(value))
+            throw new BadRequestException("Filing status must be DRAFT, READY_TO_FILE, FILED, PAID, or OVERDUE.");
+        if (module.equals("performance") && !Set.of("DRAFT", "SELF_REVIEW", "MANAGER_REVIEW", "CALIBRATION", "ACKNOWLEDGED", "DONE").contains(value))
+            throw new BadRequestException("Choose a valid performance review stage.");
+        if (module.equals("timesheets") && Set.of("APPROVED", "REJECTED").contains(value))
+            throw new BadRequestException("Use the timesheet decision action to approve or reject a submission.");
+        if (module.equals("timesheets") && !currentUser.isManager(user) && !currentUser.isAdmin(user) && !currentUser.isSuperAdmin(user)
                 && !Set.of("OPEN", "DRAFT", "SUBMITTED", "CANCELLED").contains(value))
             throw new AccessDeniedException("Only a manager or HR can approve a timesheet.");
         return value;

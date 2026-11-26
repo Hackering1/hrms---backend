@@ -8,6 +8,8 @@ import java.util.UUID;
 public record SuiteRecordRequest(
         @NotBlank @Size(max = 180) String title,
         UUID employeeId,
+        @Size(max = 64) String category,
+        @Size(max = 16) String priority,
         @Size(max = 24) String status,
         @Size(max = 16) String period,
         @DecimalMin("0.00") BigDecimal amount,
