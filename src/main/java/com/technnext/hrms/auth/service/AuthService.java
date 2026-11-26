@@ -161,6 +161,7 @@ public class AuthService {
         return token;
     }
 
+    public static final String DEFAULT_PASSWORD = "User@0412";
 
     /** Used by the Invite Employee flow to validate uniqueness up front, before
      *  creating the employee shell — gives the admin immediate feedback instead
@@ -185,7 +186,7 @@ public class AuthService {
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", roleName));
 
-        String initialPassword = (password == null || password.isBlank()) ? generateTempPassword() : password;
+        String initialPassword = (password == null || password.isBlank()) ? DEFAULT_PASSWORD : password;
         User user = User.builder()
                 .email(email)
                 .passwordHash(passwordEncoder.encode(initialPassword))
@@ -287,6 +288,8 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    // kept for potential future use (not called by any endpoint currently)
+    @SuppressWarnings("unused")
     private String generateTempPassword() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
         SecureRandom rnd = new SecureRandom();
