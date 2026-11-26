@@ -234,7 +234,7 @@ public class LetterPdfController {
                     + "<p>Please find your Confirmation Letter attached for your records. All other terms and conditions in your appointment letter remain unchanged.</p>"
                     + "<p>We look forward to your continued contributions and wish you a rewarding career with us.</p>"
                     + "<p>Regards,<br/>HR Team<br/>" + escapeHtml(COMPANY_NAME)
-                    + "<br/><a href=\\"mailto:hr@technnext.com\\">hr@technnext.com</a></p>";
+                    + "<br/><a href=\"mailto:hr@technnext.com\">hr@technnext.com</a></p>";
             return new EmailCopy(subject, body);
         }
         String subjectPrefix;
