@@ -33,7 +33,7 @@ public record EmployeeRequest(
         String uanNumber,
         String email,        // for auto-created login
         String loginRole,     // EMPLOYEE or MANAGER (null = no login)
-        String password,      // initial login password (default User@0412 if blank)
+        String password,      // initial login password (generated securely if blank)
         // nested lists (the "+" add rows)
         List<EducationDto> education,
         List<ExperienceDto> experience,
