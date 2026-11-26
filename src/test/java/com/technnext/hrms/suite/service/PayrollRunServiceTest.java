@@ -71,4 +71,39 @@ class PayrollRunServiceTest {
         assertEquals(0, new BigDecimal("200.00").compareTo(breakdown.path("professionalTax").decimalValue()));
         assertEquals(0, new BigDecimal("46300.00").compareTo(breakdown.path("netPay").decimalValue()));
     }
+
+    @Test
+    void addsEnabledPerformanceBonusToGrossAndNetPay() throws Exception {
+        SuiteRecordRepository records = Mockito.mock(SuiteRecordRepository.class);
+        PayrollProfileRepository profiles = Mockito.mock(PayrollProfileRepository.class);
+        UUID employeeId = UUID.randomUUID();
+        PayrollProfile profile = PayrollProfile.builder()
+                .employeeId(employeeId)
+                .gross(new BigDecimal("50000.00"))
+                .basic(new BigDecimal("25000.00"))
+                .hra(new BigDecimal("10000.00"))
+                .lta(new BigDecimal("2000.00"))
+                .pfRate(new BigDecimal("12.00"))
+                .esiRate(BigDecimal.ZERO)
+                .professionalTax(new BigDecimal("200.00"))
+                .tds(new BigDecimal("500.00"))
+                .employerPfRate(new BigDecimal("12.00"))
+                .employerEsiRate(BigDecimal.ZERO)
+                .gratuity(new BigDecimal("2000.00"))
+                .performanceBonusEnabled(true)
+                .performanceBonus(new BigDecimal("10000.00"))
+                .build();
+        when(profiles.findByEmployeeIdIn(List.of(employeeId))).thenReturn(List.of(profile));
+        when(records.existsByModuleAndEmployeeIdAndPeriod("payroll", employeeId, "2026-10")).thenReturn(false);
+        when(records.save(any(SuiteRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<SuiteRecord> result = new PayrollRunService(records, profiles).calculateAndGenerate(
+                new PayrollRunRequest("2026-10", List.of(new PayrollRunEmployeeInput(employeeId, 31, 0))), UUID.randomUUID());
+
+        assertEquals(new BigDecimal("56300.00"), result.get(0).getAmount());
+        JsonNode breakdown = JSON.readTree(result.get(0).getDetails());
+        assertEquals(0, new BigDecimal("10000.00").compareTo(breakdown.path("performanceBonus").decimalValue()));
+        assertEquals(0, new BigDecimal("60000.00").compareTo(breakdown.path("gross").decimalValue()));
+    }
 }
+
