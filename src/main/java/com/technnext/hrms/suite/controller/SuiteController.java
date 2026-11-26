@@ -39,6 +39,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.math.BigDecimal;
 
 /** Role- and employee-scoped API shared by payroll, time, work, performance and
  * asset workstreams. Computer monitoring is intentionally consent-led and stores
@@ -111,7 +112,7 @@ public class SuiteController {
                     + "<p>Kindly review the details mentioned in the payslip. Should you have any questions or notice any discrepancies regarding your salary, deductions, or payroll-related information, please contact the Accounts Payable Team.</p>"
                     + "<p>We sincerely appreciate your dedication, hard work, and valuable contributions to the organization. Thank you for being an integral part of our continued success.</p>"
                     + "<p>Best Regards,<br>Accounts Payable Team<br>"
-                    + "<img src=\"cid:technext-logo\" alt=\"TechNext logo\" style=\"display:block;max-width:180px;max-height:60px;margin:8px 0\">"
+                    + "<img src=\"cid:technext-logo\" alt=\"TechNext logo\" style=\"display:block;max-width:180px;max-height:60px;margin:8px 0\"><br>"
                     + "TechNext Technologies And Services Pvt Ltd<br>Email: <a href=\"mailto:ap@technnext.com\">ap@technnext.com</a></p></div>";
             emailService.sendPayslipEmail(document.recipientEmail(), "Payslip for " + displayPeriod, body,
                     document.bytes(), document.filename());
@@ -164,6 +165,41 @@ public class SuiteController {
         return ApiResponse.ok("Payroll and its payslip were restored.", payrollArchiveService.restore(id, user.getUser().getId()));
     }
 
+    @PostMapping("/payslips/{id}/resend-email")
+    public ApiResponse<SuiteRecord> resendPayslipFromHistory(@PathVariable UUID id,
+                                                              @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        SuiteRecord payslip = repository.findByIdAndModule(id, "payslips")
+                .orElseThrow(() -> new ResourceNotFoundException("Payslip", id));
+        if (payslip.getArchivedAt() != null) throw new BadRequestException("Restore this archived payslip before emailing it.");
+        SuiteRecord payroll = repository.findByModuleAndEmployeeIdAndPeriod("payroll", payslip.getEmployeeId(), payslip.getPeriod())
+                .orElseThrow(() -> new ResourceNotFoundException("Payroll record", payslip.getPeriod()));
+        return approveAndEmailPayslip(payroll.getId(), user);
+    }
+
+    @PostMapping("/payslips/{id}/archive")
+    public ApiResponse<SuiteRecord> archivePayslipFromHistory(@PathVariable UUID id,
+                                                               @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        SuiteRecord payslip = repository.findByIdAndModule(id, "payslips")
+                .orElseThrow(() -> new ResourceNotFoundException("Payslip", id));
+        SuiteRecord payroll = repository.findByModuleAndEmployeeIdAndPeriod("payroll", payslip.getEmployeeId(), payslip.getPeriod())
+                .orElseThrow(() -> new ResourceNotFoundException("Payroll record", payslip.getPeriod()));
+        return ApiResponse.ok("Payroll and payslip archived with their audit history.",
+                payrollArchiveService.archive(payroll.getId(), user.getUser().getId()));
+    }
+
+    @PostMapping("/payslips/{id}/restore")
+    public ApiResponse<SuiteRecord> restorePayslipFromHistory(@PathVariable UUID id,
+                                                               @AuthenticationPrincipal CustomUserDetails user) {
+        requirePayrollAccess(user);
+        SuiteRecord payslip = repository.findByIdAndModule(id, "payslips")
+                .orElseThrow(() -> new ResourceNotFoundException("Payslip", id));
+        SuiteRecord payroll = repository.findByModuleAndEmployeeIdAndPeriod("payroll", payslip.getEmployeeId(), payslip.getPeriod())
+                .orElseThrow(() -> new ResourceNotFoundException("Payroll record", payslip.getPeriod()));
+        return ApiResponse.ok("Payroll and payslip restored.", payrollArchiveService.restore(payroll.getId(), user.getUser().getId()));
+    }
+
     private String escapeHtml(String value) {
         if (value == null) return "";
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -192,16 +228,36 @@ public class SuiteController {
                                                            @AuthenticationPrincipal CustomUserDetails user) {
         requireHr(user);
         if (!employees.existsById(request.employeeId())) throw new ResourceNotFoundException("Employee", request.employeeId());
-        if (request.basic().add(request.hra()).add(request.lta()).compareTo(request.gross()) > 0)
-            throw new BadRequestException("Basic, HRA and LTA cannot exceed gross monthly earnings.");
+        BigDecimal da = zero(request.dearnessAllowance());
+        if (request.basic().add(da).add(request.hra()).add(request.lta()).compareTo(request.gross()) > 0)
+            throw new BadRequestException("Basic, DA, HRA and LTA cannot exceed gross monthly earnings.");
+        if (request.basic().add(da).multiply(new BigDecimal("2")).compareTo(request.gross()) < 0)
+            throw new BadRequestException("Basic plus DA must be at least 50% of gross monthly earnings.");
         PayrollProfile profile = payrollProfiles.findById(request.employeeId()).orElseGet(PayrollProfile::new);
         profile.setEmployeeId(request.employeeId()); profile.setGross(request.gross()); profile.setBasic(request.basic());
         profile.setHra(request.hra()); profile.setLta(request.lta());
+        profile.setDearnessAllowance(da);
         profile.setPfRate(request.pfRate()); profile.setEsiRate(request.esiRate()); profile.setProfessionalTax(request.professionalTax());
         profile.setTds(request.tds()); profile.setEmployerPfRate(request.employerPfRate());
         profile.setEmployerEsiRate(request.employerEsiRate()); profile.setGratuity(request.gratuity());
         profile.setPerformanceBonusEnabled(Boolean.TRUE.equals(request.performanceBonusEnabled()));
         profile.setPerformanceBonus(request.performanceBonus() == null ? java.math.BigDecimal.ZERO : request.performanceBonus());
+        profile.setPfContributionMode(request.pfContributionMode() == null ? "TWELVE_PERCENT" : request.pfContributionMode());
+        profile.setGroupMedicalInsurance(request.groupMedicalInsurance() == null ? new BigDecimal("1250.00") : request.groupMedicalInsurance());
+        profile.setTaxRegime(request.taxRegime() == null ? "NEW" : request.taxRegime());
+        profile.setTaxResident(request.taxResident() == null || request.taxResident());
+        profile.setTaxPreviousEmployerIncome(zero(request.taxPreviousEmployerIncome()));
+        profile.setTaxPreviousEmployerTds(zero(request.taxPreviousEmployerTds()));
+        profile.setTaxOtherAnnualIncome(zero(request.taxOtherAnnualIncome()));
+        profile.setTaxRentPaidAnnual(zero(request.taxRentPaidAnnual()));
+        profile.setTaxHraMetro(Boolean.TRUE.equals(request.taxHraMetro()));
+        profile.setTaxLandlordName(request.taxLandlordName()); profile.setTaxLandlordPan(request.taxLandlordPan());
+        profile.setTaxLandlordAddress(request.taxLandlordAddress());
+        profile.setTaxLtaClaimAnnual(zero(request.taxLtaClaimAnnual()));
+        profile.setTaxHomeLoanInterestAnnual(zero(request.taxHomeLoanInterestAnnual()));
+        profile.setTaxLenderName(request.taxLenderName()); profile.setTaxLenderPan(request.taxLenderPan());
+        profile.setTax80cAnnual(zero(request.tax80cAnnual())); profile.setTax80dAnnual(zero(request.tax80dAnnual()));
+        profile.setTaxNpsAnnual(zero(request.taxNpsAnnual()));
         profile.setPolicyVersion(request.policyVersion()); profile.setUpdatedBy(user.getUser().getId());
         return ApiResponse.ok("Payroll profile saved", payrollProfiles.save(profile));
     }
@@ -210,6 +266,8 @@ public class SuiteController {
         if (!currentUser.canManagePayroll(user))
             throw new AccessDeniedException("Payroll configuration is restricted to administrators and finance.");
     }
+
+    private static BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
 
     @PostMapping("/time-tracking/start")
     public ApiResponse<SuiteRecord> startTimer(@RequestBody java.util.Map<String, String> body,
