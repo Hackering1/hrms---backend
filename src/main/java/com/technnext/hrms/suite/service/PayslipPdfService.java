@@ -33,7 +33,9 @@ public class PayslipPdfService {
     private static final Color INK = new Color(0x18, 0x23, 0x35);
     private static final Color MUTED = new Color(0x4B, 0x58, 0x6A);
     private static final Color LINE = new Color(0xD1, 0xD7, 0xDE);
-    private static final Color GREEN = new Color(0x12, 0x8B, 0x43);
+    private static final Color GREEN = new Color(0x00, 0xA6, 0x50);
+    private static final Color SOFT_GREEN = new Color(0xF0, 0xFD, 0xF4);
+    private static final Color GREEN_DIVIDER = new Color(0x86, 0xEF, 0xAC);
     private static final Font NORMAL = font(9, false, INK);
     private static final Font MUTED_FONT = font(8, false, MUTED);
     private static final Font BOLD = font(9, true, INK);
@@ -129,17 +131,17 @@ public class PayslipPdfService {
         addField(summary, "UAN Number", e.getUanNumber());
         addField(summary, "PAN Number", e.getPanNumber());
         PdfPCell finalColumn = new PdfPCell(); finalColumn.setBorder(Rectangle.NO_BORDER); summary.addCell(finalColumn);
-        PdfPCell left = new PdfPCell(summary); left.setBorder(Rectangle.NO_BORDER); left.setPadding(7); outer.addCell(left);
+        PdfPCell left = new PdfPCell(summary); left.setBorderColor(LINE); left.setBorderWidth(0.8f); left.setPadding(7); outer.addCell(left);
         PdfPTable metrics = new PdfPTable(1); metrics.setWidthPercentage(100);
         metric(metrics, "Paid Days", data.path("paidDays").asText("-"));
         metric(metrics, "LOP Days", data.path("lopDays").asText("-"));
         metric(metrics, "Total Net Pay", rupees(value(data, "netPay")));
-        PdfPCell right = new PdfPCell(metrics); right.setBorderColor(GREEN); right.setBorderWidth(1.5f); right.setPadding(6); outer.addCell(right);
+        PdfPCell right = new PdfPCell(metrics); right.setBorderColor(GREEN); right.setBorderWidth(1.5f); right.setBackgroundColor(SOFT_GREEN); right.setPadding(7); outer.addCell(right);
         document.add(outer);
     }
 
     private void addCompensation(Document document, JsonNode data) throws DocumentException {
-        PdfPTable columns = new PdfPTable(new float[]{50, 50}); columns.setWidthPercentage(100); columns.setSpacingAfter(10);
+        PdfPTable columns = new PdfPTable(new float[]{50, 50}); columns.setWidthPercentage(100); columns.setSpacingAfter(0);
         PdfPTable earnings = new PdfPTable(new float[]{68, 32}); earnings.setWidthPercentage(100);
         PdfPTable deductions = new PdfPTable(new float[]{68, 32}); deductions.setWidthPercentage(100);
         addSectionHeader(earnings, "Earnings"); addSectionHeader(deductions, "Deductions");
@@ -162,8 +164,6 @@ public class PayslipPdfService {
                 .add(value(data, "professionalTax")).add(tds);
         PdfPCell left = new PdfPCell(earnings); left.setBorder(Rectangle.NO_BORDER); left.setPaddingRight(10); columns.addCell(left);
         PdfPCell right = new PdfPCell(deductions); right.setBorder(Rectangle.NO_BORDER); right.setPaddingLeft(10); columns.addCell(right);
-        document.add(columns);
-
         PdfPTable totals = new PdfPTable(new float[]{50, 50}); totals.setWidthPercentage(100);
         PdfPTable earningsTotal = new PdfPTable(new float[]{68, 32}); earningsTotal.setWidthPercentage(100);
         addTotal(earningsTotal, "Gross Earnings", value(data, "gross"));
@@ -171,7 +171,11 @@ public class PayslipPdfService {
         addTotal(deductionsTotal, "Total Deductions", totalDeductions);
         PdfPCell leftTotal = new PdfPCell(earningsTotal); leftTotal.setBorder(Rectangle.NO_BORDER); leftTotal.setPaddingRight(10); totals.addCell(leftTotal);
         PdfPCell rightTotal = new PdfPCell(deductionsTotal); rightTotal.setBorder(Rectangle.NO_BORDER); rightTotal.setPaddingLeft(10); totals.addCell(rightTotal);
-        document.add(totals);
+
+        PdfPTable compensation = new PdfPTable(1); compensation.setWidthPercentage(100); compensation.setSpacingAfter(10);
+        PdfPCell frame = new PdfPCell(); frame.setBorderColor(LINE); frame.setBorderWidth(0.8f); frame.setPadding(6);
+        frame.addElement(columns); frame.addElement(totals); compensation.addCell(frame);
+        document.add(compensation);
     }
 
     private void addNetPay(Document document, BigDecimal net) throws DocumentException {
@@ -185,8 +189,8 @@ public class PayslipPdfService {
         c.addElement(new Paragraph(label, MUTED_FONT)); c.addElement(new Paragraph(orDash(value), NORMAL)); table.addCell(c);
     }
     private void metric(PdfPTable table, String label, String value) {
-        PdfPCell c = new PdfPCell(); c.setBorder(Rectangle.BOTTOM); c.setBorderColor(new Color(0xB9, 0xF0, 0xC7)); c.setPadding(8);
-        Paragraph a = new Paragraph(label, font(8, false, GREEN)); a.setAlignment(Element.ALIGN_CENTER); c.addElement(a);
+        PdfPCell c = new PdfPCell(); c.setBorder(Rectangle.BOTTOM); c.setBorderColor(GREEN_DIVIDER); c.setBackgroundColor(SOFT_GREEN); c.setPadding(8);
+        Paragraph a = new Paragraph(label, font(9, true, GREEN)); a.setAlignment(Element.ALIGN_CENTER); c.addElement(a);
         Paragraph b = new Paragraph(value, "Total Net Pay".equals(label) ? BIG : font(17, true, INK)); b.setAlignment(Element.ALIGN_CENTER); c.addElement(b); table.addCell(c);
     }
     private void addSectionHeader(PdfPTable table, String value) { PdfPCell c = cell(value, BOLD); c.setColspan(2); c.setPadding(8); c.setBorder(Rectangle.NO_BORDER); table.addCell(c); }
