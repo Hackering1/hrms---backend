@@ -136,6 +136,12 @@ public class LetterPdfService {
                     : new PageDecorator());
             doc.open();
             String type = r.letterType() == null ? "OFFER" : r.letterType().toUpperCase();
+            if (type.equals("CONFIRMATION")) {
+                addLetterhead(doc);
+                addConfirmationBody(doc, r);
+                doc.close();
+                return out.toByteArray();
+            }
             // Relieving / Experience letter is a distinct, single-page layout.
             if (type.equals("RELIEVING") || type.equals("EXPERIENCE") || type.equals("SERVICE")) {
                 addLetterhead(doc);
@@ -189,6 +195,47 @@ public class LetterPdfService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate letter PDF: " + e.getMessage(), e);
         }
+    }
+
+    private void addConfirmationBody(Document doc, LetterPdfRequest r) throws DocumentException {
+        Paragraph date = new Paragraph("Date: " + safe(r.letterDate()), BODY);
+        date.setSpacingBefore(8f);
+        date.setSpacingAfter(18f);
+        doc.add(date);
+
+        Paragraph title = new Paragraph("CONFIRMATION LETTER", TITLE);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(24f);
+        doc.add(title);
+
+        Paragraph greeting = new Paragraph("Dear " + safe(r.employeeName()) + ",", BODY);
+        greeting.setSpacingAfter(12f);
+        doc.add(greeting);
+
+        Paragraph confirmation = new Paragraph();
+        confirmation.setAlignment(Element.ALIGN_JUSTIFIED);
+        confirmation.add(new Chunk("Consequent to the review of your performance during your probation, we have the pleasure in informing you that, your services are being confirmed as ", BODY));
+        confirmation.add(new Chunk(safe(r.designation()), BODY_B));
+        confirmation.add(new Chunk(" with effect from ", BODY));
+        confirmation.add(new Chunk(safe(r.dateOfJoining()), BODY_B));
+        confirmation.add(new Chunk(".", BODY));
+        confirmation.setSpacingAfter(14f);
+        doc.add(confirmation);
+
+        Paragraph terms = new Paragraph("All the other terms and conditions as detailed in your appointment letter remain unchanged.", BODY);
+        terms.setAlignment(Element.ALIGN_JUSTIFIED);
+        terms.setSpacingAfter(12f);
+        doc.add(terms);
+
+        Paragraph closing = new Paragraph("We look forward to your valuable contributions and wish you all the very best for a rewarding career with the organization.", BODY);
+        closing.setAlignment(Element.ALIGN_JUSTIFIED);
+        closing.setSpacingAfter(24f);
+        doc.add(closing);
+
+        doc.add(new Paragraph("Regards,", BODY));
+        addSignatureImageOrGap(doc, r.signatureFileId());
+        doc.add(new Paragraph(safe(r.signatoryName()), BODY));
+        doc.add(new Paragraph(safe(r.signatoryTitle()), BODY));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

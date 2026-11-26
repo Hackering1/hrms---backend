@@ -50,6 +50,10 @@ public class EmailService {
     @Value("${app.mail.from}")
     private String fromMailbox;
 
+    // Formatted employee letters are issued by HR even when other mail flows use a different sender.
+    @Value("${app.mail.letter-from:hr@technnext.com}")
+    private String letterFromMailbox;
+
     // Payslips are sent from Accounts Payable; Graph must be authorized for this mailbox.
     @Value("${app.mail.payslip-from:ap@technnext.com}")
     private String payslipFromMailbox;
@@ -202,7 +206,8 @@ public class EmailService {
             throw new IllegalArgumentException("Recipient email is required.");
         }
         try {
-            sendViaGraph(toEmail, subject, htmlBody, pdfBytes, pdfFilename);
+            sendViaGraph(toEmail, subject, htmlBody, pdfBytes, pdfFilename,
+                    null, null, null, letterFromMailbox);
             log.info("[EmailService] Letter email sent to {}", toEmail);
         } catch (Exception ex) {
             log.error("[EmailService] Failed to send letter email to {}: {}", toEmail, ex.getMessage(), ex);

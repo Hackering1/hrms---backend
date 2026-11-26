@@ -62,6 +62,7 @@ public class LetterPdfController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HR_ADMIN','HR_EXECUTIVE','FINANCE_ADMIN')")
     public ResponseEntity<byte[]> generate(@RequestBody LetterPdfRequest request) {
         LetterPdfRequest enriched = enrich(request);
+        validateConfirmationLetter(enriched);
         validateInternshipOffer(enriched);
         byte[] pdf = pdfService.generate(enriched);
         String filename = typeLabel(enriched.letterType()) + "_Letter_" +
@@ -126,6 +127,13 @@ public class LetterPdfController {
         }
 
         LetterPdfRequest enriched = enrich(request.letter());
+        Employee confirmationEmployee = validateConfirmationLetter(enriched);
+        if (confirmationEmployee != null) {
+            email = confirmationEmployee.getEmail() == null ? "" : confirmationEmployee.getEmail().trim();
+            if (email.isBlank() || !EMAIL_PATTERN.matcher(email).matches()) {
+                throw new BadRequestException("The selected employee does not have a valid email address on file.");
+            }
+        }
         validateInternshipOffer(enriched);
 
         byte[] pdf;
@@ -216,6 +224,19 @@ public class LetterPdfController {
      */
     private EmailCopy emailCopyFor(String letterType, String label, String name, String role, String title) {
         String type = letterType == null ? "" : letterType.toUpperCase();
+        if ("CONFIRMATION".equals(type)) {
+            String subject = "Employment Confirmation Letter | " + COMPANY_NAME;
+            String body = "<p>Dear " + escapeHtml(name) + ",</p>"
+                    + "<p>Greetings from " + escapeHtml(COMPANY_NAME) + ".</p>"
+                    + "<p>Following the review of your performance during probation, we are pleased to confirm your services as <strong>"
+                    + escapeHtml(role == null ? "employee" : role)
+                    + "</strong>, with the effective date stated in the attached letter.</p>"
+                    + "<p>Please find your Confirmation Letter attached for your records. All other terms and conditions in your appointment letter remain unchanged.</p>"
+                    + "<p>We look forward to your continued contributions and wish you a rewarding career with us.</p>"
+                    + "<p>Regards,<br/>HR Team<br/>" + escapeHtml(COMPANY_NAME)
+                    + "<br/><a href=\"mailto:hr@technnext.com\">hr@technnext.com</a></p>";
+            return new EmailCopy(subject, body);
+        }
         String subjectPrefix;
         String typePhrase; // lowercase, used inline in body sentences
         switch (type) {
@@ -276,6 +297,7 @@ public class LetterPdfController {
     private String typeLabel(String type) {
         if (type == null) return "Offer";
         switch (type.toUpperCase()) {
+            case "CONFIRMATION": return "Confirmation";
             case "APPOINTMENT": return "Appointment";
             case "RELIEVING":   return "Relieving";
             case "EXPERIENCE":  return "Experience";
@@ -317,6 +339,21 @@ public class LetterPdfController {
     }
 
     private boolean notBlank(String s) { return s != null && !s.isBlank(); }
+
+    private Employee validateConfirmationLetter(LetterPdfRequest request) {
+        if (request == null || !"CONFIRMATION".equalsIgnoreCase(request.letterType())) return null;
+        if (request.employeeId() == null) {
+            throw new BadRequestException("Select an employee from the saved employee list to issue a confirmation letter.");
+        }
+        Employee employee = employeeRepository.findById(request.employeeId())
+                .orElseThrow(() -> new BadRequestException("The selected employee could not be found."));
+        if (request.employeeName() == null || request.employeeName().isBlank()
+                || request.designation() == null || request.designation().isBlank()
+                || request.dateOfJoining() == null || request.dateOfJoining().isBlank()) {
+            throw new BadRequestException("Employee name, designation, and confirmation effective date are required.");
+        }
+        return employee;
+    }
 
     /**
      * Extracted, unchanged, from the original generate() body — enriches
