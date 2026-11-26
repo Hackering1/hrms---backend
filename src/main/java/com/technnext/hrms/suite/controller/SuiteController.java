@@ -431,6 +431,8 @@ public class SuiteController {
     }
 
     private UUID targetEmployee(String module, UUID requested, CustomUserDetails user) {
+        // Keep assets in an unassigned stock pool until HR issues them.
+        if (module.equals("assets") && requested == null) return null;
         if (module.equals("payroll") || module.equals("payslips") || module.equals("statutory") || module.equals("assets")) {
             if (requested == null) throw new BadRequestException("Select an employee for this record.");
             if (Set.of("payroll", "payslips", "statutory").contains(module) && currentUser.canManagePayroll(user)) return requested;
