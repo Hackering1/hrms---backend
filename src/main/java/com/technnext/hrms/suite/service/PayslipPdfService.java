@@ -91,7 +91,7 @@ public class PayslipPdfService {
     }
 
     private void addHeader(Document document, String period) throws Exception {
-        PdfPTable header = new PdfPTable(new float[]{22, 50, 28});
+        PdfPTable header = new PdfPTable(new float[]{20, 60, 20});
         header.setWidthPercentage(100);
         PdfPCell logoCell = new PdfPCell(); logoCell.setBorder(Rectangle.NO_BORDER); logoCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
         try (InputStream in = new ClassPathResource("letter-logo.jpg").getInputStream()) {
@@ -100,7 +100,7 @@ public class PayslipPdfService {
         header.addCell(logoCell);
         PdfPCell companyCell = new PdfPCell(); companyCell.setBorder(Rectangle.NO_BORDER); companyCell.setHorizontalAlignment(Element.ALIGN_CENTER);
         companyCell.setNoWrap(true);
-        Paragraph company = new Paragraph(COMPANY, font(8.5f, true, INK)); company.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(company);
+        Paragraph company = new Paragraph(COMPANY, font(10.5f, true, INK)); company.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(company);
         Paragraph tagline = new Paragraph(TAGLINE, MUTED_FONT); tagline.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(tagline);
         Paragraph address = new Paragraph(ADDRESS, MUTED_FONT); address.setAlignment(Element.ALIGN_CENTER); companyCell.addElement(address);
         header.addCell(companyCell);
@@ -117,7 +117,7 @@ public class PayslipPdfService {
     private void addEmployeeSummary(Document document, Employee e, SuiteRecord payroll, JsonNode data) throws DocumentException {
         PdfPTable outer = new PdfPTable(new float[]{66, 34}); outer.setWidthPercentage(100); outer.setSpacingAfter(12);
         PdfPTable summary = new PdfPTable(new float[]{50, 50}); summary.setWidthPercentage(100);
-        PdfPCell title = cell("Employee Summary", BOLD); title.setColspan(2); title.setPadding(8); summary.addCell(title);
+        PdfPCell title = cell("Employee Summary", BOLD); title.setColspan(2); title.setPadding(8); title.setBorder(Rectangle.NO_BORDER); summary.addCell(title);
         addField(summary, "Employee Name", fullName(e)); addField(summary, "Employee ID", e.getEmployeeCode());
         addField(summary, "Designation", e.getDesignation() == null ? "" : e.getDesignation().getName());
         addField(summary, "Department", e.getDepartment() == null ? "" : e.getDepartment().getName());
@@ -129,7 +129,7 @@ public class PayslipPdfService {
         addField(summary, "UAN Number", e.getUanNumber());
         addField(summary, "PAN Number", e.getPanNumber());
         PdfPCell finalColumn = new PdfPCell(); finalColumn.setBorder(Rectangle.NO_BORDER); summary.addCell(finalColumn);
-        PdfPCell left = new PdfPCell(summary); left.setBorderColor(LINE); left.setPadding(7); outer.addCell(left);
+        PdfPCell left = new PdfPCell(summary); left.setBorder(Rectangle.NO_BORDER); left.setPadding(7); outer.addCell(left);
         PdfPTable metrics = new PdfPTable(1); metrics.setWidthPercentage(100);
         metric(metrics, "Paid Days", data.path("paidDays").asText("-"));
         metric(metrics, "LOP Days", data.path("lopDays").asText("-"));
@@ -156,13 +156,20 @@ public class PayslipPdfService {
         addAmount(deductions, "Professional Tax", value(data, "professionalTax"));
         BigDecimal tds = value(data, "tds");
         if (tds.signum() > 0) addAmount(deductions, "TDS", tds);
-        addTotal(earnings, "Gross Earnings", value(data, "gross"));
         BigDecimal totalDeductions = value(data, "employeePf").add(employeeEsi)
                 .add(value(data, "professionalTax")).add(tds);
-        addTotal(deductions, "Total Deductions", totalDeductions);
         PdfPCell left = new PdfPCell(earnings); left.setBorder(Rectangle.NO_BORDER); left.setPaddingRight(10); columns.addCell(left);
         PdfPCell right = new PdfPCell(deductions); right.setBorder(Rectangle.NO_BORDER); right.setPaddingLeft(10); columns.addCell(right);
         document.add(columns);
+
+        PdfPTable totals = new PdfPTable(new float[]{50, 50}); totals.setWidthPercentage(100);
+        PdfPTable earningsTotal = new PdfPTable(new float[]{68, 32}); earningsTotal.setWidthPercentage(100);
+        addTotal(earningsTotal, "Gross Earnings", value(data, "gross"));
+        PdfPTable deductionsTotal = new PdfPTable(new float[]{68, 32}); deductionsTotal.setWidthPercentage(100);
+        addTotal(deductionsTotal, "Total Deductions", totalDeductions);
+        PdfPCell leftTotal = new PdfPCell(earningsTotal); leftTotal.setBorder(Rectangle.NO_BORDER); leftTotal.setPaddingRight(10); totals.addCell(leftTotal);
+        PdfPCell rightTotal = new PdfPCell(deductionsTotal); rightTotal.setBorder(Rectangle.NO_BORDER); rightTotal.setPaddingLeft(10); totals.addCell(rightTotal);
+        document.add(totals);
     }
 
     private void addNetPay(Document document, BigDecimal net) throws DocumentException {
