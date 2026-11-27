@@ -306,6 +306,42 @@ public class EmployeeService {
         return saved;
     }
 
+    /** Update the HR-managed fields for an employee who has not completed onboarding. */
+    @Transactional
+    public Employee updateInviteShell(UUID employeeId, InviteEmployeeRequest req) {
+        Employee e = findOrThrow(employeeId);
+        if (!"INVITED".equalsIgnoreCase(e.getOnboardingStatus())) {
+            throw new BadRequestException("Only an unfinished invited profile can be edited.");
+        }
+        String code = req.employeeCode() == null || req.employeeCode().isBlank()
+                ? e.getEmployeeCode() : req.employeeCode().trim();
+        if (!code.equals(e.getEmployeeCode()) && employeeRepository.existsByEmployeeCode(code)) {
+            throw new BadRequestException("Employee code already exists: " + code);
+        }
+        e.setEmployeeCode(code);
+        e.setFirstName(req.firstName().trim());
+        e.setLastName(req.lastName().trim());
+        e.setEmail(req.email().trim());
+        e.setDateOfJoining(req.dateOfJoining());
+        e.setDepartment(req.departmentId() == null ? null : departmentRepository.findById(req.departmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Department", req.departmentId())));
+        e.setDesignation(req.designationId() == null ? null : designationRepository.findById(req.designationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Designation", req.designationId())));
+        if (req.branchId() != null) {
+            e.setBranch(branchRepository.findById(req.branchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", req.branchId())));
+        }
+        if (req.shiftId() != null) {
+            e.setShift(shiftRepository.findById(req.shiftId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Shift", req.shiftId())));
+        }
+        Employee saved = employeeRepository.save(e);
+        List<EmployeeManager> currentManagers = employeeManagerRepository.findByEmployeeId(employeeId);
+        if (!currentManagers.isEmpty()) employeeManagerRepository.deleteAll(currentManagers);
+        assignManagerIfPresent(employeeId, req.managerId());
+        return saved;
+    }
+
     /**
      * Candidate's "Complete Registration": fills in everything the invite shell
      * didn't have, and (only now) sets up leave accrual + probation tracking,

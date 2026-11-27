@@ -125,6 +125,53 @@ public class EmployeeInviteService {
     }
 
     @Transactional
+    public EmployeeInvite updateInvitation(UUID inviteId, InviteEmployeeRequest req) {
+        EmployeeInvite invite = inviteRepository.findById(inviteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation", inviteId));
+        if (!"PENDING".equalsIgnoreCase(invite.getStatus())) {
+            throw new BadRequestException("Only a pending invitation can be edited.");
+        }
+        if (req == null || blank(req.firstName()) || blank(req.lastName()) || blank(req.email())
+                || blank(req.loginRole()) || req.dateOfJoining() == null) {
+            throw new BadRequestException("Complete all required invitation fields before saving.");
+        }
+
+        String email = req.email().trim();
+        if (!email.equalsIgnoreCase(invite.getEmail()) && authService.emailAlreadyRegistered(email)) {
+            throw new BadRequestException("Email already registered: " + email);
+        }
+        boolean duplicateInvite = inviteRepository.findAll().stream()
+                .anyMatch(other -> !other.getId().equals(inviteId)
+                        && email.equalsIgnoreCase(other.getEmail())
+                        && "PENDING".equalsIgnoreCase(other.getStatus()));
+        if (duplicateInvite) {
+            throw new BadRequestException("An active invitation already exists for: " + email);
+        }
+
+        Employee shell = employeeService.updateInviteShell(invite.getEmployeeId(), req);
+        invite.setEmail(email);
+        invite.setLoginRole(req.loginRole().trim());
+        invite.setToken(newInviteToken());
+        invite.setExpiresAt(LocalDateTime.now().plusHours(TOKEN_VALID_HOURS));
+        inviteRepository.save(invite);
+
+        String link = onboardingLinkBaseUrl + "?token=" + invite.getToken();
+        eventPublisher.publishEvent(new EmployeeInviteEmailEvent(
+                invite.getEmail(), shell.getFirstName(), shell.getLastName(),
+                shell.getEmployeeCode(), link));
+        return invite;
+    }
+
+    private String newInviteToken() {
+        return UUID.randomUUID().toString().replace("-", "")
+                + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private boolean blank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    @Transactional
     public void cancelInvitation(UUID inviteId) {
         EmployeeInvite invite = inviteRepository.findById(inviteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation", inviteId));
