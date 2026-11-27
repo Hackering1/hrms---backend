@@ -133,8 +133,10 @@ public class EmployeeController {
         UUID managerToAssign = currentUser.isAdmin(principal) || currentUser.isSuperAdmin(principal)
                 ? body.managerId()
                 : currentUser.ownEmployeeId(principal);
+        boolean restoringArchived = service.isDeletedEmployeeCode(body.employeeCode());
         EmployeeResponse response = service.create(body, managerToAssign, currentUser.isAdmin(principal));
-        return ApiResponse.ok("Created", currentUser.isManager(principal) && !currentUser.isAdmin(principal)
+        String message = restoringArchived ? "Archived employee restored" : "Created";
+        return ApiResponse.ok(message, currentUser.isManager(principal) && !currentUser.isAdmin(principal)
                 ? response.withoutSensitiveData() : response);
     }
 

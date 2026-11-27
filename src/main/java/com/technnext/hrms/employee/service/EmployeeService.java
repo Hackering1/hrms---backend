@@ -152,8 +152,13 @@ public class EmployeeService {
         String code = (req.employeeCode() == null || req.employeeCode().isBlank())
                 ? generateEmployeeCode()
                 : req.employeeCode().trim();
-        if (employeeRepository.existsByEmployeeCode(code)) {
-            throw new BadRequestException("Employee code already exists: " + code);
+        var existing = employeeRepository.findByEmployeeCode(code);
+        if (existing.isPresent()) {
+            Employee archived = existing.get();
+            if (!"DELETED".equalsIgnoreCase(archived.getStatus())) {
+                throw new BadRequestException("Employee code already exists: " + code);
+            }
+            return restoreArchivedEmployee(archived, req, managerIdToAssign, isAdmin);
         }
         Employee e = new Employee();
         apply(e, req, isAdmin);
@@ -227,6 +232,66 @@ public class EmployeeService {
             ));
         }
         return resp;
+    }
+
+    /**
+     * Restore the existing soft-deleted employee row for a matching employee code.
+     * Keeping the same row preserves payroll, attendance, leave and audit history.
+     */
+    @Transactional
+    private EmployeeResponse restoreArchivedEmployee(
+            Employee archived, EmployeeRequest req, UUID managerIdToAssign, boolean isAdmin) {
+        if (!isAdmin) {
+            throw new BadRequestException("Only an admin can restore an archived employee.");
+        }
+
+        String requestedEmail = req.email() == null ? "" : req.email().trim();
+        String archivedEmail = archived.getEmail() == null ? "" : archived.getEmail().trim();
+        if (archivedEmail.isBlank() && archived.getUserId() != null) {
+            archivedEmail = userRepository.findById(archived.getUserId())
+                    .map(u -> u.getEmail() == null ? "" : u.getEmail().trim())
+                    .orElse("");
+        }
+
+        boolean identityMatches;
+        if (!requestedEmail.isBlank() && !archivedEmail.isBlank()) {
+            identityMatches = requestedEmail.equalsIgnoreCase(archivedEmail);
+        } else {
+            identityMatches = sameName(archived.getFirstName(), req.firstName())
+                    && sameName(archived.getLastName(), req.lastName());
+        }
+        if (!identityMatches) {
+            throw new BadRequestException(
+                    "This employee ID belongs to an archived employee with different identity details. "
+                    + "Use the original employee email or name, or choose a different ID.");
+        }
+
+        archived.setStatus("ACTIVE");
+        archived.setOnboardingStatus("ACTIVE");
+        Employee restored = employeeRepository.save(archived);
+
+        if (restored.getUserId() != null) {
+            userRepository.findById(restored.getUserId()).ifPresent(user -> {
+                user.setIsActive(true);
+                userRepository.save(user);
+            });
+        }
+        if (managerIdToAssign != null) {
+            assignManagerIfPresent(restored.getId(), managerIdToAssign);
+        }
+        return toResponse(restored);
+    }
+
+    private boolean sameName(String left, String right) {
+        return left != null && right != null && left.trim().equalsIgnoreCase(right.trim());
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isDeletedEmployeeCode(String employeeCode) {
+        if (employeeCode == null || employeeCode.isBlank()) return false;
+        return employeeRepository.findByEmployeeCode(employeeCode.trim())
+                .map(employee -> "DELETED".equalsIgnoreCase(employee.getStatus()))
+                .orElse(false);
     }
 
     /**
