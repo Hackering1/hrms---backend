@@ -39,6 +39,11 @@ public class EmployeeInviteController {
         return ApiResponse.ok("Invitation resent", inviteService.resendInvitation(id));
     }
 
+    @PutMapping("/invitations/{id}")
+    public ApiResponse<EmployeeInvite> update(@PathVariable UUID id, @RequestBody InviteEmployeeRequest body) {
+        return ApiResponse.ok("Invitation updated and resent", inviteService.updateInvitation(id, body));
+    }
+
     @DeleteMapping("/invitations/{id}")
     public ApiResponse<Void> cancel(@PathVariable UUID id) {
         inviteService.cancelInvitation(id);
